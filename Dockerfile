@@ -24,8 +24,12 @@ RUN pnpm --filter @popcorno/server... build \
 
 FROM node:22.21.1-bookworm-slim
 # ffmpeg comes from Debian stable: pinned by the base image tag, patched by Dependabot bumps.
-# hadolint ignore=DL3008
+# `apt-get upgrade` (DL3005) is deliberate: the node base image lags Debian's security
+# updates (17 fixed HIGH/CRITICAL CVEs in perl, pcre2, gnutls, libcap on 2026-10-23) and
+# the weekly Trivy scan blocks on them; the upgrade is reproducible per base image digest.
+# hadolint ignore=DL3008,DL3005
 RUN apt-get update \
+  && apt-get upgrade -y --no-install-recommends \
   && apt-get install -y --no-install-recommends ffmpeg \
   && rm -rf /var/lib/apt/lists/* \
   && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx

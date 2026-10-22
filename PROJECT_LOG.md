@@ -39,6 +39,17 @@ context: merged PRs, decisions, tags, infra events. Not a release changelog — 
   coverage 100 %. Second QA pass `qa/2026-10-23-issue-3-library-scan-r2/`. Nice items
   filed as a follow-up issue. Gotcha: pass the SonarQube token through an exported
   variable, not `VAR=… cmd -D…="$VAR"` (zsh expands the argument first → 401).
+- **PR #14 review + CI (2026-10-23)** — Codex findings fixed in `477b1f0`: an unreadable
+  file disables pruning (P1), the library root's real path is checked against the real
+  `MEDIA_ROOT` at scan time (P2), the relative path joins the unchanged fingerprint and a
+  second link to a seen file is reported `duplicate` (P2). CI then exposed that the Docker
+  image never started: `pnpm deploy` v10 refuses non-injected workspaces (`--legacy`) and
+  Node refuses to strip types under `node_modules`, so `@popcorno/shared` now builds to
+  `dist/` (types from `src/`, Vitest aliases `src/`) — `f2c8e12`. Trivy image then blocked
+  on 17 fixed Debian CVEs (perl, pcre2, gnutls, libcap) the node base image lags behind:
+  `apt-get upgrade` in the runtime layer, DL3005 waived inline with the reason. Lesson: a
+  local image build is verified by running the container (`/health`, `/proc/1/status`),
+  not by its exit code.
 
 ## 2026-10-22 — Project bootstrap
 
