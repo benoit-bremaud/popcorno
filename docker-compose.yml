@@ -1,0 +1,16 @@
+services:
+  popcorno:
+    build: .
+    image: popcorno:local
+    ports:
+      - '3000:3000'
+    env_file:
+      - .env.local
+    volumes:
+      - popcorno-data:/app/data
+      # Point this at your own media folder; read-only is enough for playback.
+      - ${MEDIA_ROOT:-./media}:/app/media:ro
+    restart: unless-stopped
+
+volumes:
+  popcorno-data:

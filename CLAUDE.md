@@ -1,0 +1,60 @@
+# CLAUDE.md — Popcorno
+
+Project context for any AI agent session. Inherits the machine-global rules in
+`~/.claude/CLAUDE.md` and `~/.agent-rules/common.md`; this file only adds what is specific
+to Popcorno.
+
+## What this project is
+
+A self-hosted media server + web player built from scratch, taking the best of Jellyfin
+(free, self-hosted), Plex (automatic metadata) and Netflix (browsing and playback UX). It
+serves the owner's own media files only — no content source is ever integrated.
+
+## Working method
+
+Conception precedes code (owner rule, conception gate in `common.md`):
+
+1. Requirements — `docs/requirements/`
+2. UML 2.5 in Mermaid (skill `uml-diagram-new`) — `docs/architecture/diagrams/<feature>/`
+3. Decisions — MADR ADRs with an MCDA matrix — `docs/architecture/decisions/`
+4. Implementation, one issue per brick, tests mandatory
+
+## Stack (ADR-0001)
+
+All-TypeScript pnpm monorepo. `apps/server` (Fastify 5, Drizzle + better-sqlite3, pino,
+zod), `apps/web` (React 19 + Vite, hls.js), `packages/shared` (contracts). FFmpeg is an
+external process driven by the server (HLS transcode when the browser cannot direct-play).
+Metadata from TMDB. Node ≥ 22.
+
+Hard rules: TypeScript strict, no `any`, named exports only, design tokens for colors /
+spacing / typography, tests with every feature (Vitest unit, Playwright e2e later).
+
+## Conventions
+
+- Chat in French; code, comments, commits, PR bodies, docs in English.
+- Conventional Commits; dedicated branch off `main` per issue; PR closes the issue.
+- Every chat is named `#N Issue title` and works on that single issue.
+- Log every merged PR and decision in `PROJECT_LOG.md` (skill `project-log-discipline`).
+- Containers follow skill `docker-hardening` (non-root, HEALTHCHECK, pinned bases, Hadolint,
+  Trivy).
+
+## Git / GitHub
+
+- Local git email `bbd.concept@gmail.com` (personal); GitHub account `benoit-bremaud`.
+- Repo **public** until the first production deployment, then private (owner rule
+  2026-10-15; Public Release Checklist in the global `CLAUDE.md`).
+- Default labels only until a label triptych is adopted in a dedicated PR.
+
+## Useful commands
+
+- `pnpm install` — install the workspace (`better-sqlite3` and `esbuild` builds allowed).
+- `pnpm dev:server` — Fastify API on <http://localhost:3000> (`GET /health`).
+- `pnpm dev:web` — Vite dev server on <http://localhost:5173> (`/api` proxied to the server).
+- `pnpm typecheck` · `pnpm lint` · `pnpm format:check` · `pnpm test` · `pnpm build`.
+- `make lint-docker` · `make scan-docker-config` · `make scan-docker-image IMAGE=…`.
+
+## Current state
+
+Phase 0 — bootstrap: repo skeleton, tooling, CI, Docker, vision + first UML study of the
+playback feature, ADR-0001 (stack). Next: issue-per-brick MVP (library scan, TMDB
+metadata, catalog grid, direct-play player, HLS transcode, resume playback, profiles).

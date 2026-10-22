@@ -1,0 +1,29 @@
+# Dependencies / build
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Environment — only .env.example is committed
+.env
+.env.*
+!.env.example
+
+# Runtime data (SQLite database, transcode cache, media)
+data/
+media/
+
+# Tooling output
+.trivy/
+.scannerwork/
+playwright-report/
+test-results/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Personal overrides
+CLAUDE.local.md

@@ -1,0 +1,3 @@
+# Accepted Trivy findings. Every entry needs `paths`, `expired_at` and `statement`.
+vulnerabilities: []
+misconfigurations: []

@@ -1,0 +1,13 @@
+.git
+.github
+**/.env*
+!.env.example
+**/node_modules
+**/dist
+**/coverage
+**/*.test.ts
+docs
+data
+media
+.trivy
+*.md
