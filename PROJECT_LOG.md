@@ -31,8 +31,9 @@ context: merged PRs, decisions, tags, infra events. Not a release changelog — 
   handler, series keyed by title + year, parser regex fixes (part separator, plausible
   year, anchored edition suffix, resolution labels, extras only below the title folder,
   show folder wins), `as const` kind lists shared by zod and Drizzle, JSON column mode,
-  docs re-aligned (ADR-0002 arithmetic 445 → 455, diagrams 02/03/04, spec). Migration
-  `0001_media-relative-path` adds the column. SonarQube then failed on 7 new code smells
+  docs re-aligned (ADR-0002 arithmetic 445 → 455, diagrams 02/03/04, spec). The schema
+  change was folded into the single initial migration `0000_library-scan` (nothing
+  deployed yet; owner decision, MCDA A 440/500 vs keeping a `0001` ALTER). SonarQube then failed on 7 new code smells
   (regex backtracking, cognitive complexity, `await` in a loop) — cleared in `f5788f3`
   (gate PASSED, 0 issue). Tests 37 → 82, coverage 98.0 % stmts / 95.0 % branches, doc
   coverage 100 %. Second QA pass `qa/2026-10-23-issue-3-library-scan-r2/`. Nice items

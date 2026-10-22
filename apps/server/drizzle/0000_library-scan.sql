@@ -13,6 +13,7 @@ CREATE TABLE `media` (
 	`title` text NOT NULL,
 	`year` integer,
 	`file_path` text,
+	`relative_path` text,
 	`file_size` integer,
 	`file_mtime_ms` integer,
 	`duration_sec` integer,

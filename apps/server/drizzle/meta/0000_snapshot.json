@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "8682d585-1e6c-463c-976a-b344ffe84fee",
+  "id": "3f092e15-8917-4ed1-868b-4fa48a1cf208",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "libraries": {
@@ -94,6 +94,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "relative_path": {
+          "name": "relative_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "file_size": {
           "name": "file_size",
           "type": "integer",
@@ -169,12 +176,17 @@
       "indexes": {
         "media_library_file_idx": {
           "name": "media_library_file_idx",
-          "columns": ["library_id", "file_path"],
+          "columns": [
+            "library_id",
+            "file_path"
+          ],
           "isUnique": true
         },
         "media_series_idx": {
           "name": "media_series_idx",
-          "columns": ["series_id"],
+          "columns": [
+            "series_id"
+          ],
           "isUnique": false
         }
       },
@@ -183,8 +195,12 @@
           "name": "media_library_id_libraries_id_fk",
           "tableFrom": "media",
           "tableTo": "libraries",
-          "columnsFrom": ["library_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "library_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -259,8 +275,12 @@
           "name": "streams_media_id_media_id_fk",
           "tableFrom": "streams",
           "tableTo": "media",
-          "columnsFrom": ["media_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "media_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
