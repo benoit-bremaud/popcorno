@@ -42,11 +42,12 @@ const EXTRA_STEM = /^(trailer|sample|theme)$/i;
 const PROVIDER_TAG = /[[{](tmdb|imdb)(?:id)?-([a-z0-9]+)[\]}]/gi;
 const EDITION_TAG = /\{edition-([^}]+)\}/i;
 /** Jellyfin version suffix right after the year: `Title (1982) - Director's Cut`. */
-const EDITION_SUFFIX = /^\s+-\s+(.+)$/;
+const EDITION_SUFFIX = /^\s+-\s+(\S.*)$/;
 /** Resolution-like labels are Jellyfin "versions" of the same cut, not editions. */
 const RESOLUTION_LABEL = /^(\d{3,4}p|[48]k|uhd|hd|sd)$/i;
-const PART_SUFFIX = /[ ._-](?:cd|dvd|part|pt|disc|disk)[ ._-]?(\d+|[a-d])$/i;
-const TITLE_YEAR = /^(.*?)\s*\(((?:18|19|20)\d{2})\)/;
+const PART_SUFFIX = /[ ._-](?:cd|dvd|part|pt|disc|disk)[ ._-]?(\d{1,3}|[a-d])$/i;
+/** Lazy title up to the first `(year)`; `clean()` trims the space, so no `\s*` here (backtracking). */
+const TITLE_YEAR = /^(.*?)\(((?:18|19|20)\d{2})\)/;
 const SEASON_FOLDER = /^season\s*(\d+)$/i;
 const SPECIALS_FOLDER = /^specials$/i;
 const EPISODE_CODE = /\bS(\d{1,2})\s?E(\d{1,3})(?:-?E?(\d{1,3}))?\b/i;
@@ -97,8 +98,6 @@ function parseFilm(stem: string, folders: readonly string[]): ParsedName {
 
 function parseEpisode(stem: string, folders: readonly string[]): ParsedName {
   const tags = extractTags(stem);
-  const code = EPISODE_CODE.exec(tags.rest);
-  const codeX = code ? null : EPISODE_CODE_X.exec(tags.rest);
   const parent = folders[folders.length - 1];
   const seasonFolder = parent === undefined ? null : SEASON_FOLDER.exec(parent);
   const isSpecials = parent !== undefined && SPECIALS_FOLDER.test(parent);
@@ -106,27 +105,12 @@ function parseEpisode(stem: string, folders: readonly string[]): ParsedName {
   const show = showFolder === undefined ? null : TITLE_YEAR.exec(stripTags(showFolder));
   const showTitle = clean(show?.[1] ?? (showFolder === undefined ? '' : stripTags(showFolder)));
   const providerIds = collectProviderIds(showFolder ?? '');
+  let folderSeason: number | null = null;
+  if (isSpecials) folderSeason = 0;
+  else if (seasonFolder) folderSeason = Number(seasonFolder[1]);
+  const code = episodeCode(tags.rest) ?? { season: folderSeason, episode: null, episodeEnd: null };
 
-  let season: number | null = null;
-  let episode: number | null = null;
-  let episodeEnd: number | null = null;
-  let titleBeforeCode = '';
-  if (code) {
-    season = Number(code[1]);
-    episode = Number(code[2]);
-    episodeEnd = code[3] === undefined ? null : Number(code[3]);
-    titleBeforeCode = tags.rest.slice(0, code.index);
-  } else if (codeX) {
-    season = Number(codeX[1]);
-    episode = Number(codeX[2]);
-    titleBeforeCode = tags.rest.slice(0, codeX.index);
-  } else if (isSpecials) {
-    season = 0;
-  } else if (seasonFolder) {
-    season = Number(seasonFolder[1]);
-  }
-
-  if (season === null && episode === null) {
+  if (code.season === null) {
     return {
       kind: 'unknown',
       title: stem,
@@ -140,18 +124,46 @@ function parseEpisode(stem: string, folders: readonly string[]): ParsedName {
     };
   }
   // The show folder is the Plex / Jellyfin source of truth; the file prefix is a fallback.
-  const title = showTitle || clean(titleBeforeCode) || stem;
+  const title = showTitle || clean(code.titleBefore ?? '') || stem;
   return {
     kind: 'episode',
     title,
     year: show ? Number(show[2]) : null,
-    season,
-    episode,
-    episodeEnd:
-      episodeEnd !== null && episode !== null && episodeEnd <= episode ? null : episodeEnd,
+    ...code,
     providerIds,
     edition: tags.edition,
     part: tags.part,
+  };
+}
+
+interface EpisodeCode {
+  readonly season: number | null;
+  readonly episode: number | null;
+  readonly episodeEnd: number | null;
+  /** Text before the code, usually the show name again. */
+  readonly titleBefore?: string;
+}
+
+/** `S01E02[-E03]` or the `1x02` fallback; a range ending before its start is dropped. */
+function episodeCode(rest: string): EpisodeCode | null {
+  const code = EPISODE_CODE.exec(rest);
+  if (code) {
+    const episode = Number(code[2]);
+    const end = code[3] === undefined ? null : Number(code[3]);
+    return {
+      season: Number(code[1]),
+      episode,
+      episodeEnd: end !== null && end <= episode ? null : end,
+      titleBefore: rest.slice(0, code.index),
+    };
+  }
+  const codeX = EPISODE_CODE_X.exec(rest);
+  if (!codeX) return null;
+  return {
+    season: Number(codeX[1]),
+    episode: Number(codeX[2]),
+    episodeEnd: null,
+    titleBefore: rest.slice(0, codeX.index),
   };
 }
 

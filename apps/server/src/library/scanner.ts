@@ -76,23 +76,23 @@ export class LibraryScanner {
     const seen = new Set<string>();
     const counts = { added: 0, updated: 0 };
 
-    for (const filePath of files) {
+    await forEachSeries(files, async (filePath) => {
       const relativePath = toPosix(relative(root, filePath));
       const located = await locate(root, filePath);
       if (typeof located === 'string') {
         skipped.push({ path: relativePath, reason: located });
-        continue;
+        return;
       }
       if (isExtra(relativePath)) {
         skipped.push({ path: relativePath, reason: 'extra' });
-        continue;
+        return;
       }
       // Seen as soon as it belongs to the library: a failed probe must not delete its row.
       seen.add(located.realPath);
       const outcome = await this.store(library, relativePath, located);
       if (outcome === 'probe_failed') skipped.push({ path: relativePath, reason: outcome });
       else if (outcome !== 'unchanged') counts[outcome] += 1;
-    }
+    });
     // Pruning is only safe when the walk saw the whole tree and the root is not an empty
     // mount point: otherwise present files would be deleted (and their future metadata).
     const canPrune = unreadableDirs.length === 0 && files.length > 0;
@@ -166,25 +166,41 @@ async function locate(root: string, filePath: string): Promise<LocatedFile | Ski
 }
 
 interface WalkResult {
-  readonly files: string[];
-  readonly unreadableDirs: string[];
+  readonly files: readonly string[];
+  readonly unreadableDirs: readonly string[];
 }
 
-/** Recursive walk; an unreadable directory is reported and its siblings continue (spec 3a). */
-async function walk(dir: string, result: WalkResult = { files: [], unreadableDirs: [] }) {
+const EMPTY_WALK: WalkResult = { files: [], unreadableDirs: [] };
+
+/**
+ * Recursive walk, directories read concurrently, result in sorted order; an unreadable
+ * directory is reported and its siblings continue (spec 3a).
+ */
+async function walk(dir: string): Promise<WalkResult> {
   let entries: Dirent[];
   try {
     entries = await readdir(dir, { withFileTypes: true });
   } catch {
-    result.unreadableDirs.push(dir);
-    return result;
+    return { files: [], unreadableDirs: [dir] };
   }
-  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) await walk(full, result);
-    else if (SUPPORTED_EXTENSIONS.has(extname(entry.name).toLowerCase())) result.files.push(full);
-  }
-  return result;
+  const sorted = [...entries].sort((a, b) => a.name.localeCompare(b.name));
+  const children = await Promise.all(
+    sorted.map((entry): Promise<WalkResult> => {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) return walk(full);
+      const supported = SUPPORTED_EXTENSIONS.has(extname(entry.name).toLowerCase());
+      return Promise.resolve(supported ? { files: [full], unreadableDirs: [] } : EMPTY_WALK);
+    }),
+  );
+  return {
+    files: children.flatMap((child) => child.files),
+    unreadableDirs: children.flatMap((child) => child.unreadableDirs),
+  };
+}
+
+/** Runs `fn` on the items one after the other: one ffprobe process at a time, sorted order. */
+function forEachSeries<T>(items: readonly T[], fn: (item: T) => Promise<void>): Promise<void> {
+  return items.reduce((previous, item) => previous.then(() => fn(item)), Promise.resolve());
 }
 
 function toPosix(path: string): string {
