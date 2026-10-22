@@ -17,10 +17,10 @@ export const SUPPORTED_EXTENSIONS: ReadonlySet<string> = new Set([
   '.mov',
 ]);
 
-/** Thrown when the library root cannot be walked at all (spec extension 2b). */
+/** Thrown when the library root cannot be walked at all or escapes the media root (spec 2b). */
 export class RootUnreadableError extends Error {
-  constructor(rootPath: string) {
-    super(`Library root is not a readable directory: ${rootPath}`);
+  constructor(rootPath: string, reason: string) {
+    super(`Library root ${rootPath} ${reason}`);
     this.name = 'RootUnreadableError';
   }
 }
@@ -46,14 +46,17 @@ type StoreOutcome = 'added' | 'updated' | 'unchanged' | 'probe_failed';
 export class LibraryScanner {
   private readonly running = new Set<string>();
 
+  /** `mediaRoot`: the folder every library root must resolve under, symlinks followed. */
   constructor(
     private readonly repository: LibraryRepository,
     private readonly probe: Prober,
+    private readonly mediaRoot: string,
   ) {}
 
   /**
    * Runs UC1 on one library and returns its report.
-   * @throws {RootUnreadableError} when the root is missing or not a directory (spec 2b).
+   * @throws {RootUnreadableError} when the root is missing, not a directory, or a link
+   *   whose target escapes the media root (spec 2b).
    * @throws {ScanRunningError} when a scan of the same library is in flight (spec *a).
    */
   async scan(library: Library): Promise<ScanReport> {
@@ -67,7 +70,7 @@ export class LibraryScanner {
   }
 
   private async run(library: Library): Promise<ScanReport> {
-    const root = await realRoot(library.rootPath);
+    const root = await realRoot(library.rootPath, this.mediaRoot);
     const { files, unreadableDirs } = await walk(root);
     const skipped: SkippedFile[] = unreadableDirs.map((dir) => ({
       path: toPosix(relative(root, dir)),
@@ -75,16 +78,23 @@ export class LibraryScanner {
     }));
     const seen = new Set<string>();
     const counts = { added: 0, updated: 0 };
+    let unreadableFiles = 0;
 
     await forEachSeries(files, async (filePath) => {
       const relativePath = toPosix(relative(root, filePath));
       const located = await locate(root, filePath);
       if (typeof located === 'string') {
+        if (located === 'unreadable') unreadableFiles += 1;
         skipped.push({ path: relativePath, reason: located });
         return;
       }
       if (isExtra(relativePath)) {
         skipped.push({ path: relativePath, reason: 'extra' });
+        return;
+      }
+      // One row per real file: a second link to it (sorted order) is reported, not stored.
+      if (seen.has(located.realPath)) {
+        skipped.push({ path: relativePath, reason: 'duplicate' });
         return;
       }
       // Seen as soon as it belongs to the library: a failed probe must not delete its row.
@@ -93,9 +103,10 @@ export class LibraryScanner {
       if (outcome === 'probe_failed') skipped.push({ path: relativePath, reason: outcome });
       else if (outcome !== 'unchanged') counts[outcome] += 1;
     });
-    // Pruning is only safe when the walk saw the whole tree and the root is not an empty
-    // mount point: otherwise present files would be deleted (and their future metadata).
-    const canPrune = unreadableDirs.length === 0 && files.length > 0;
+    // Pruning is only safe when the walk saw the whole tree, every file could be
+    // fingerprinted and the root is not an empty mount point: otherwise present files
+    // would be deleted (and their future metadata).
+    const canPrune = unreadableDirs.length === 0 && unreadableFiles === 0 && files.length > 0;
     const removed = canPrune ? this.repository.deleteMissing(library.id, seen) : 0;
     return { ...counts, removed, skipped };
   }
@@ -106,7 +117,13 @@ export class LibraryScanner {
     file: LocatedFile,
   ): Promise<StoreOutcome> {
     const stored = this.repository.findStoredFile(library.id, file.realPath);
-    if (stored?.fileSize === file.fileSize && stored.fileMtimeMs === file.fileMtimeMs) {
+    // The relative path is part of the fingerprint: a renamed link to the same target
+    // must refresh the path-derived fields (title, year, episode…).
+    if (
+      stored?.fileSize === file.fileSize &&
+      stored.fileMtimeMs === file.fileMtimeMs &&
+      stored.relativePath === relativePath
+    ) {
       return 'unchanged';
     }
     let probed: Awaited<ReturnType<Prober>>;
@@ -142,10 +159,18 @@ export class LibraryScanner {
   }
 }
 
-async function realRoot(rootPath: string): Promise<string> {
+/**
+ * The real path of the library root, checked against the real media root: a link placed
+ * under `MEDIA_ROOT` must not pull an external tree into the library.
+ */
+async function realRoot(rootPath: string, mediaRoot: string): Promise<string> {
   const info = await stat(rootPath).catch(() => null);
-  if (!info?.isDirectory()) throw new RootUnreadableError(rootPath);
-  return realpath(rootPath);
+  if (!info?.isDirectory()) throw new RootUnreadableError(rootPath, 'is not a readable directory');
+  const [real, realMediaRoot] = await Promise.all([realpath(rootPath), realpath(mediaRoot)]);
+  if (real !== realMediaRoot && resolveUnderRoot(realMediaRoot, real) === null) {
+    throw new RootUnreadableError(rootPath, 'resolves outside MEDIA_ROOT');
+  }
+  return real;
 }
 
 /** Resolves and fingerprints one file; a dangling link is `unreadable`, an escape `outside_root`. */

@@ -74,15 +74,21 @@ The owner calls `POST /libraries/:id/scan`.
 
 - **2a. Library not found** → `404 { error: 'library_not_found' }`; use case ends.
 - **2a'. Malformed library id** → `400 { error: 'invalid_request' }`; use case ends.
-- **2b. Root does not exist or is not a directory** → `409 { error: 'root_unreadable' }`;
-  use case ends.
+- **2b. Root does not exist, is not a directory, or is a link whose real path escapes
+  `MEDIA_ROOT`** → `409 { error: 'root_unreadable' }`; use case ends. The real paths of
+  both the media root and the library root are compared at scan time, since a link can
+  be created after the library was.
 - **3a. A sub-directory cannot be read** (permissions) → it is listed in `skipped` with
   reason `unreadable`; the walk continues with its siblings and step 8 is skipped
   (`removed` 0): the rows under that directory may still be valid.
 - **3b. The walk finds no file at all** (empty or unmounted root) → step 8 is skipped;
   the rows stay until a scan sees the files again.
 - **4b. The file cannot be resolved** (dangling symlink, stat failure) → listed in
-  `skipped` with reason `unreadable`; it does not count as seen. Continue at 3.
+  `skipped` with reason `unreadable`; it does not count as seen and step 8 is skipped
+  (`removed` 0): a transient failure must not prune a present file. Continue at 3.
+- **4d. The real path was already seen in this scan** (a second link to the same file)
+  → listed in `skipped` with reason `duplicate`; the first path in sorted order owns the
+  row. Continue at 3.
 - **4a. The resolved path escapes the root** (symlink to `/etc`, `..` segment) → the file
   is listed in `skipped` with reason `outside_root`; nothing is stored. Continue at 3.
 - **4c. The file is an extra** (Plex/Jellyfin extras folder below the title folder, or a
@@ -99,8 +105,10 @@ The owner calls `POST /libraries/:id/scan`.
   episode (`series`, `season`, `number`) → both are stored (one `Media` per file; the
   key is the file path). The catalog (issue #5) decides how to present duplicates; the
   scan never drops a file silently.
-- **7b. The file is unchanged** (same size and mtime as the stored row) → probing and
-  parsing are skipped, the row counts as neither added nor updated. Continue at 3.
+- **7b. The file is unchanged** (same size, mtime and relative path as the stored row) →
+  probing and parsing are skipped, the row counts as neither added nor updated. A renamed
+  link to the same file changes the relative path, so its title / year are re-parsed.
+  Continue at 3.
 - **\*a. A scan of the same library is already running** → `409 { error: 'scan_running' }`.
 
 ## Technology and data variations

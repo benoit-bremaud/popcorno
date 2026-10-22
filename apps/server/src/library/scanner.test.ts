@@ -41,7 +41,7 @@ describe('LibraryScanner', () => {
     root = await mkdtemp(join(tmpdir(), 'popcorno-scan-'));
     repository = new LibraryRepository(openDatabase(':memory:'));
     probe = makeProbe();
-    scanner = new LibraryScanner(repository, probe);
+    scanner = new LibraryScanner(repository, probe, root);
     library = repository.createLibrary({ name: 'Films', rootPath: root, kind: 'films' });
   });
 
@@ -182,7 +182,7 @@ describe('LibraryScanner', () => {
   it('reports a file ffprobe rejects and keeps its previous row (spec 6a)', async () => {
     await touch(root, 'Broken (2021).mkv');
     await scanner.scan(library);
-    scanner = new LibraryScanner(repository, makeProbe(['Broken (2021).mkv']));
+    scanner = new LibraryScanner(repository, makeProbe(['Broken (2021).mkv']), root);
     await writeFile(join(root, 'Broken (2021).mkv'), 'now corrupt');
 
     const report = await scanner.scan(library);
@@ -202,6 +202,56 @@ describe('LibraryScanner', () => {
     const report = await scanner.scan(library);
 
     expect(report.skipped).toEqual([{ path: 'Dangling (2000).mkv', reason: 'unreadable' }]);
+  });
+
+  it('prunes nothing when a file could not be fingerprinted (dangling link, transient error)', async () => {
+    await touch(root, 'Kept (2000).mkv');
+    await scanner.scan(library);
+    await symlink(join(root, 'nowhere.mkv'), join(root, 'Dangling (2000).mkv'));
+    await rm(join(root, 'Kept (2000).mkv'));
+
+    const report = await scanner.scan(library);
+
+    expect(report.removed).toBe(0);
+    expect(repository.listMedia(library.id)).toHaveLength(1);
+  });
+
+  it('refreshes the path-derived fields when a link to the same file is renamed', async () => {
+    const target = await touch(root, 'store/video.mkv');
+    await symlink(target, join(root, 'Old Name (2000).mkv'));
+    await scanner.scan(library);
+    await rm(join(root, 'Old Name (2000).mkv'));
+    await symlink(target, join(root, 'New Name (2001).mkv'));
+
+    const report = await scanner.scan(library);
+
+    expect(report).toEqual({
+      added: 0,
+      updated: 1,
+      removed: 0,
+      skipped: [{ path: 'store/video.mkv', reason: 'duplicate' }],
+    });
+    const titles = repository.listMedia(library.id).map((item) => [item.title, item.year]);
+    expect(titles).toContainEqual(['New Name', 2001]);
+    expect(titles).not.toContainEqual(['Old Name', 2000]);
+  });
+
+  it('rejects a root that is a link to a folder outside MEDIA_ROOT (spec 2b)', async () => {
+    const outside = await mkdtemp(join(tmpdir(), 'popcorno-outside-'));
+    try {
+      await touch(outside, 'Secret (2000).mkv');
+      await symlink(outside, join(root, 'escape'));
+      const linked = repository.createLibrary({
+        name: 'Escape',
+        rootPath: join(root, 'escape'),
+        kind: 'films',
+      });
+
+      await expect(scanner.scan(linked)).rejects.toThrow('resolves outside MEDIA_ROOT');
+      expect(repository.listMedia(linked.id)).toHaveLength(0);
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
   });
 
   it('stores a symlink inside the root under its real path (spec 4a)', async () => {

@@ -36,7 +36,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
   }));
 
   const repository = new LibraryRepository(options.db);
-  const scanner = new LibraryScanner(repository, options.probe);
+  const scanner = new LibraryScanner(repository, options.probe, options.mediaRoot);
   registerLibraryRoutes(app, { repository, scanner, mediaRoot: options.mediaRoot });
 
   return app;

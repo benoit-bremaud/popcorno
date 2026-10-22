@@ -76,7 +76,7 @@ export interface Media {
 }
 
 /** Why a file was left out of the library during a scan (spec extensions). */
-export type SkipReason = 'unreadable' | 'outside_root' | 'probe_failed' | 'extra';
+export type SkipReason = 'unreadable' | 'outside_root' | 'probe_failed' | 'extra' | 'duplicate';
 
 /** One entry of `ScanReport.skipped`: the relative path and why it was left out. */
 export interface SkippedFile {

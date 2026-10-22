@@ -22,6 +22,7 @@ export interface StoredFile {
   readonly id: string;
   readonly fileSize: number | null;
   readonly fileMtimeMs: number | null;
+  readonly relativePath: string | null;
 }
 
 /** SQLite binds at most 32 766 variables per statement; ids are deleted in chunks. */
@@ -59,7 +60,12 @@ export class LibraryRepository {
   findStoredFile(libraryId: string, filePath: string): StoredFile | null {
     return (
       this.db
-        .select({ id: media.id, fileSize: media.fileSize, fileMtimeMs: media.fileMtimeMs })
+        .select({
+          id: media.id,
+          fileSize: media.fileSize,
+          fileMtimeMs: media.fileMtimeMs,
+          relativePath: media.relativePath,
+        })
         .from(media)
         .where(and(eq(media.libraryId, libraryId), eq(media.filePath, filePath)))
         .get() ?? null

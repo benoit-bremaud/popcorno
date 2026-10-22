@@ -32,8 +32,8 @@ sequenceDiagram
     API-->>O: 409 scan_running
   else
     API->>SC: scan(library)
-    SC->>FS: stat + realpath(rootPath)
-    alt Root missing or not a directory
+    SC->>FS: stat + realpath(rootPath), realpath(mediaRoot)
+    alt Root missing, not a directory, or real path outside MEDIA_ROOT
       SC-->>API: RootUnreadableError
       API-->>O: 409 root_unreadable
     else
@@ -49,10 +49,12 @@ sequenceDiagram
             PG-->>SC: null → skipped (outside_root)
           else Extra (isExtra)
             SC-->>SC: skipped (extra)
+          else Real path already seen in this scan
+            SC-->>SC: skipped (duplicate)
           else
             SC-->>SC: seen.add(realPath)
             SC->>DB: findStoredFile(libraryId, realPath)
-            alt Same size and mtime
+            alt Same size, mtime and relative path
               DB-->>SC: unchanged → no probe
             else New or changed
               SC->>FP: probe(realPath)
@@ -71,7 +73,7 @@ sequenceDiagram
           end
         end
       end
-      opt No unreadable directory and at least one file seen
+      opt No unreadable directory or file, and at least one file found
         SC->>DB: deleteMissing(libraryId, seen) — then orphan series
       end
       SC-->>API: ScanReport
