@@ -8,6 +8,19 @@
 - Resolution: every Must and Should applied in 8ba4f3a (owner decision on Must 4: option A,
   MCDA 440/500); Nice items filed as a follow-up issue; Disagree items kept as designed.
 
+## Pre-merge gate — final (head SHA 983b112, after the PR #14 review and CI fixes)
+
+| Step        | Result |
+| ----------- | ------ |
+| 1 Tests     | ✅ 85 unit/integration (Vitest, 7 files) · CI 9/9 checks green on 983b112                                      |
+| 2 Coverage  | tests ✅ 98.1 % stmts / 95.3 % branches / 94.5 % funcs / 97.8 % lines (floor 80) · docs ✅ 100 % (floor 90)     |
+| 3 SonarQube | ✅ PASSED on 983b112 (0 issue, 0 hotspot)                                                                     |
+| 4 Secrets   | ✅ gitleaks clean (`main..HEAD`) · only `.env.example` tracked · diff read: nothing sensitive                  |
+| 5 QA pass   | ✅ full — rebuilt server on loopback + `ffprobe`, fixture replayed, 0 server errors: `qa/2026-10-23-issue-3-library-scan-r3/` · Docker image: Trivy 0 finding, container healthy as uid 1000, `CapEff 0` |
+
+- Gate: **GREEN — merge authorised**. Codex findings (P1 pruning after an unreadable file,
+  P2 root link escaping `MEDIA_ROOT`, P2 renamed alias) fixed in 477b1f0 and answered inline.
+
 ## Pre-merge gate re-run (code SHA f5788f3; later commits are docs / QA evidence only)
 
 | Step        | Result                                                                                                        |
