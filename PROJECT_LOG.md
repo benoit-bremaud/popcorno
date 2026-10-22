@@ -4,6 +4,23 @@ Chronological operational logbook (newest first). Complements `git log` with the
 context: merged PRs, decisions, tags, infra events. Not a release changelog — that is
 `CHANGELOG.md`.
 
+## 2026-10-22 — #3 Library scan (PR pending)
+
+- **Conception gate** — textual Cockburn spec UC1 (`docs/architecture/specs/library-scan.md`),
+  sequence diagram `02-sequence-scan-library.md`, ADR-0002 file-naming parser: own regex
+  parser (A, 445/500) vs `@ctrl/video-filename-parser` (B, 315) vs `parse-torrent-title`
+  (C, 315); owner asked for a deeper analysis, both libraries were run on nine Plex-style
+  names (neither reads folder context or provider-id tags), then validated A. Owner
+  direction: follow the Plex and Jellyfin naming conventions (ids, editions, parts,
+  episode ranges, specials, extras folders) — recorded in the spec.
+- **Implementation** — Drizzle + better-sqlite3 schema (`libraries`, `media`, `streams`),
+  migration `0000_library-scan`, pure name parser and path guard, `ffprobe` runner as the
+  single process egress, scanner (idempotent on size + mtime, deletes missing files,
+  reports skipped files with a reason), routes with zod validation. 37 unit tests,
+  coverage 95.7 % lines / 90.9 % branches (threshold 80 % in `vitest.config.ts`).
+- **QA** — real server + `ffprobe 8.0.1` on a generated fixture (corrupt file, extras folder,
+  symlink to `/etc`): `docs/architecture/qa/2026-10-22-issue-3-library-scan/`.
+
 ## 2026-10-22 — Project bootstrap
 
 - **Project created** — name chosen among plaidou / popcorno / zapette (owner pick:

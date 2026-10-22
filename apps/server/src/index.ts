@@ -1,12 +1,22 @@
+import { mkdir } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { buildApp } from './app.js';
+import { loadConfig } from './config.js';
+import { openDatabase } from './db/index.js';
+import { createFfprobe } from './library/ffprobe.js';
 
-const port = Number(process.env['PORT'] ?? 3000);
-const host = process.env['HOST'] ?? '0.0.0.0';
+const config = loadConfig(process.env);
+await mkdir(dirname(config.databasePath), { recursive: true });
 
-const app = buildApp({ version: process.env['npm_package_version'] ?? '0.0.0', logger: true });
+const app = buildApp({
+  version: process.env['npm_package_version'] ?? '0.0.0',
+  db: openDatabase(config.databasePath),
+  probe: createFfprobe(config.ffprobePath),
+  logger: true,
+});
 
 try {
-  await app.listen({ port, host });
+  await app.listen({ port: config.port, host: config.host });
 } catch (error) {
   app.log.error(error);
   process.exit(1);

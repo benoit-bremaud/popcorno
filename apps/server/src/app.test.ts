@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
+import { openDatabase } from './db/index.js';
 
 describe('GET /health', () => {
   it('reports ok with the running version', async () => {
-    const app = buildApp({ version: '0.0.0-test' });
+    const app = buildApp({
+      version: '0.0.0-test',
+      db: openDatabase(':memory:'),
+      probe: async () => ({ durationSec: null, streams: [] }),
+    });
 
     const response = await app.inject({ method: 'GET', url: '/health' });
 
