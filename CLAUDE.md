@@ -50,7 +50,8 @@ spacing / typography, tests with every feature (Vitest unit, Playwright e2e late
 - `pnpm install` — install the workspace (`better-sqlite3` and `esbuild` builds allowed).
 - `pnpm dev:server` — Fastify API on <http://localhost:3000> (`GET /health`).
 - `pnpm dev:web` — Vite dev server on <http://localhost:5173> (`/api` proxied to the server).
-- `pnpm typecheck` · `pnpm lint` · `pnpm format:check` · `pnpm test` · `pnpm build`.
+- `pnpm typecheck` · `pnpm lint` · `pnpm format:check` · `pnpm test` · `pnpm coverage` ·
+  `pnpm build`.
 - `make lint-docker` · `make scan-docker-config` · `make scan-docker-image IMAGE=…`.
 
 ## Current state
@@ -58,7 +59,8 @@ spacing / typography, tests with every feature (Vitest unit, Playwright e2e late
 MVP bricks, one issue each. Done: bootstrap (repo, tooling, CI, Docker, vision, UML,
 ADR-0001); #3 library scan (spec `docs/architecture/specs/library-scan.md`, ADR-0002 own
 name parser, Drizzle schema `libraries` / `media` / `streams`, routes `POST|GET
-/libraries`, `POST /libraries/:id/scan`, `GET /libraries/:id/media`). Next: #4 TMDB
+/libraries`, `POST /libraries/:id/scan`, `GET /libraries/:id/media`; library roots are
+confined under `MEDIA_ROOT`, `HOST` defaults to loopback). Next: #4 TMDB
 metadata, #5 catalog grid, #7 direct play, #8 HLS transcode, #9 resume, #10 profiles.
 
 Server layout (flat, component diagram 03): `src/library/` holds the pure `name-parser`

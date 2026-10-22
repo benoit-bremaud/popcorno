@@ -12,6 +12,7 @@ const app = buildApp({
   version: process.env['npm_package_version'] ?? '0.0.0',
   db: openDatabase(config.databasePath),
   probe: createFfprobe(config.ffprobePath),
+  mediaRoot: config.mediaRoot,
   logger: true,
 });
 

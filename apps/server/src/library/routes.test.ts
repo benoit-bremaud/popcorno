@@ -1,35 +1,37 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import type { Library } from '@popcorno/shared';
+import type { ApiError, Library } from '@popcorno/shared';
 import { buildApp } from '../app.js';
 import { openDatabase } from '../db/index.js';
+import type { Prober } from './ffprobe.js';
 
 describe('library routes', () => {
   let app: FastifyInstance;
+  let mediaRoot: string;
   let root: string;
+  let probe: ReturnType<typeof vi.fn<Prober>>;
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'popcorno-routes-'));
-    app = buildApp({
-      version: 'test',
-      db: openDatabase(':memory:'),
-      probe: async () => ({ durationSec: 60, streams: [] }),
-    });
+    mediaRoot = await mkdtemp(join(tmpdir(), 'popcorno-routes-'));
+    root = join(mediaRoot, 'films');
+    await mkdir(root);
+    probe = vi.fn<Prober>(async () => ({ durationSec: 60, streams: [] }));
+    app = buildApp({ version: 'test', db: openDatabase(':memory:'), probe, mediaRoot });
   });
 
   afterEach(async () => {
     await app.close();
-    await rm(root, { recursive: true, force: true });
+    await rm(mediaRoot, { recursive: true, force: true });
   });
 
-  async function createLibrary(): Promise<Library> {
+  async function createLibrary(rootPath = root): Promise<Library> {
     const response = await app.inject({
       method: 'POST',
       url: '/libraries',
-      payload: { name: 'Films', rootPath: root, kind: 'films' },
+      payload: { name: 'Films', rootPath, kind: 'films' },
     });
     expect(response.statusCode).toBe(201);
     return response.json<Library>();
@@ -44,7 +46,13 @@ describe('library routes', () => {
     expect(list.json()).toEqual([library]);
   });
 
-  it('rejects an invalid body with the zod issues', async () => {
+  it('accepts the media root itself and normalises the path', async () => {
+    const library = await createLibrary(`${mediaRoot}/films/../`);
+
+    expect(library.rootPath).toBe(mediaRoot);
+  });
+
+  it('rejects an invalid body with the path and message of each issue only', async () => {
     const response = await app.inject({
       method: 'POST',
       url: '/libraries',
@@ -52,12 +60,26 @@ describe('library routes', () => {
     });
 
     expect(response.statusCode).toBe(400);
-    const body = response.json<{ error: string; details: { path: string[] }[] }>();
+    const body = response.json<{ error: string; details: { path: string[]; message: string }[] }>();
     expect(body.error).toBe('invalid_request');
     expect(body.details.map((issue) => issue.path[0]).sort()).toEqual(['kind', 'name', 'rootPath']);
+    expect(Object.keys(body.details[0] ?? {}).sort()).toEqual(['message', 'path']);
   });
 
-  it('scans a library and lists its media', async () => {
+  it('rejects a root outside MEDIA_ROOT', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/libraries',
+      payload: { name: 'Etc', rootPath: '/etc', kind: 'films' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json<ApiError>().details).toEqual([
+      { path: ['rootPath'], message: 'rootPath must be under MEDIA_ROOT' },
+    ]);
+  });
+
+  it('scans a library and lists its media with relative paths', async () => {
     const library = await createLibrary();
     await writeFile(join(root, 'Heat (1995).mkv'), 'x');
 
@@ -66,34 +88,65 @@ describe('library routes', () => {
 
     expect(scan.statusCode).toBe(200);
     expect(scan.json()).toEqual({ added: 1, updated: 0, removed: 0, skipped: [] });
-    expect(media.json()).toMatchObject([
-      { title: 'Heat', year: 1995, durationSec: 60, streams: [] },
+    expect(media.json()).toEqual([
+      expect.objectContaining({
+        title: 'Heat',
+        year: 1995,
+        relativePath: 'Heat (1995).mkv',
+        durationSec: 60,
+        streams: [],
+      }),
     ]);
+    expect(media.body).not.toContain(mediaRoot);
   });
 
-  it('answers 404 for an unknown library and 400 for a malformed id', async () => {
-    const unknown = await app.inject({
-      method: 'POST',
-      url: `/libraries/${crypto.randomUUID()}/scan`,
+  it.each([
+    ['POST', 'scan'],
+    ['GET', 'media'],
+  ] as const)('%s /libraries/:id/%s answers 404 for an unknown library', async (method, action) => {
+    const response = await app.inject({
+      method,
+      url: `/libraries/${crypto.randomUUID()}/${action}`,
     });
-    const malformed = await app.inject({ method: 'GET', url: '/libraries/not-a-uuid/media' });
 
-    expect(unknown.statusCode).toBe(404);
-    expect(unknown.json()).toEqual({ error: 'library_not_found' });
-    expect(malformed.statusCode).toBe(400);
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: 'library_not_found' });
+  });
+
+  it.each([
+    ['POST', 'scan'],
+    ['GET', 'media'],
+  ] as const)('%s /libraries/:id/%s answers 400 for a malformed id', async (method, action) => {
+    const response = await app.inject({ method, url: `/libraries/not-a-uuid/${action}` });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json<ApiError>().error).toBe('invalid_request');
   });
 
   it('answers 409 when the root cannot be read', async () => {
-    const response = await app.inject({
-      method: 'POST',
-      url: '/libraries',
-      payload: { name: 'Ghost', rootPath: join(root, 'missing'), kind: 'films' },
-    });
-    const library = response.json<Library>();
+    const library = await createLibrary(join(root, 'missing'));
 
     const scan = await app.inject({ method: 'POST', url: `/libraries/${library.id}/scan` });
 
     expect(scan.statusCode).toBe(409);
     expect(scan.json()).toEqual({ error: 'root_unreadable' });
+  });
+
+  it('answers 409 while a scan of the same library is running', async () => {
+    const library = await createLibrary();
+    await writeFile(join(root, 'Heat (1995).mkv'), 'x');
+    let release: () => void = () => undefined;
+    probe.mockImplementationOnce(
+      () => new Promise((resolve) => (release = () => resolve({ durationSec: 1, streams: [] }))),
+    );
+
+    const first = app.inject({ method: 'POST', url: `/libraries/${library.id}/scan` });
+    await vi.waitFor(() => expect(probe).toHaveBeenCalledTimes(1));
+    const second = await app.inject({ method: 'POST', url: `/libraries/${library.id}/scan` });
+    release();
+
+    expect(second.statusCode).toBe(409);
+    expect(second.json()).toEqual({ error: 'scan_running' });
+    expect((await first).statusCode).toBe(200);
   });
 });

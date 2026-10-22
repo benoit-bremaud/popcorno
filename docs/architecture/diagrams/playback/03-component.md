@@ -27,23 +27,29 @@ flowchart LR
       Entities[Media, Library, Profile, WatchProgress]
     end
     Scan[Library scanner]
+    Parser[Name parser + path guard]
     Meta[TMDB client]
     Trans[FFmpeg runner]
+    Probe[ffprobe runner]
     Repo[SQLite repositories]
     Routes --> Decider
     Routes --> Repo
     Routes --> Trans
     Routes --> Scan
-    Scan --> Meta
+    Scan --> Parser
+    Scan --> Probe
     Scan --> Repo
+    Meta --> Repo
     Decider --> Entities
+    Parser --> Entities
     Repo --> Entities
   end
   UI --> Contracts
   Routes --> Contracts
   UI -->|"HTTP"| Routes
   Meta -->|"HTTPS"| TMDB[("TMDB")]
-  Trans -->|"child process"| FFmpeg[["ffmpeg / ffprobe"]]
+  Trans -->|"child process"| FFmpeg[["ffmpeg"]]
+  Probe -->|"child process"| FFprobe[["ffprobe"]]
   Repo --> DB[("SQLite")]
 ```
 
@@ -52,4 +58,7 @@ flowchart LR
 - Flat layering on purpose: routes call the domain and the adapters directly. A ports
   layer appears only when a second implementation exists (e.g. a second metadata
   provider).
-- `FFmpeg runner` is the single egress to the process API; nothing else spawns processes.
+- The two runners are the only egress to the process API; nothing else spawns processes.
+  The scanner receives the `ffprobe runner` as a function (`Prober`) so tests inject a
+  fake. `Name parser + path guard` are pure (no fs, no process). The TMDB client (#4)
+  enriches rows the scanner stored; the scanner does not call it.

@@ -1,0 +1,1 @@
+ALTER TABLE `media` ADD `relative_path` text;

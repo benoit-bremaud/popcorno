@@ -18,6 +18,7 @@ export interface ParsedName {
   readonly part: number | null;
 }
 
+/** Jellyfin extras folder names; only honoured below the title folder (a top-level `Shorts/` is content). */
 const EXTRA_FOLDERS = new Set([
   'behind the scenes',
   'deleted scenes',
@@ -33,15 +34,19 @@ const EXTRA_FOLDERS = new Set([
   'theme-music',
   'backdrops',
 ]);
+/** Jellyfin extra suffixes: `-trailer`, `.sample`, `_clip`… (a space is not a separator: `Hot Clip.mkv` is a film). */
 const EXTRA_SUFFIX =
-  /[-._ ](trailer|sample|scene|clip|interview|behindthescenes|deleted|deletedscene|featurette|short|other|extra)$/i;
+  /[-._](trailer|sample|scene|clip|interview|behindthescenes|deleted|deletedscene|featurette|short|other|extra)$/i;
 const EXTRA_STEM = /^(trailer|sample|theme)$/i;
 
 const PROVIDER_TAG = /[[{](tmdb|imdb)(?:id)?-([a-z0-9]+)[\]}]/gi;
 const EDITION_TAG = /\{edition-([^}]+)\}/i;
-const EDITION_SUFFIX = /\s[-._]\s(.+)$/;
-const PART_SUFFIX = /[ ._-]?(?:cd|dvd|part|pt|disc|disk)[ ._-]?(\d+|[a-d])$/i;
-const TITLE_YEAR = /^(.*?)\s*\((\d{4})\)/;
+/** Jellyfin version suffix right after the year: `Title (1982) - Director's Cut`. */
+const EDITION_SUFFIX = /^\s+-\s+(.+)$/;
+/** Resolution-like labels are Jellyfin "versions" of the same cut, not editions. */
+const RESOLUTION_LABEL = /^(\d{3,4}p|[48]k|uhd|hd|sd)$/i;
+const PART_SUFFIX = /[ ._-](?:cd|dvd|part|pt|disc|disk)[ ._-]?(\d+|[a-d])$/i;
+const TITLE_YEAR = /^(.*?)\s*\(((?:18|19|20)\d{2})\)/;
 const SEASON_FOLDER = /^season\s*(\d+)$/i;
 const SPECIALS_FOLDER = /^specials$/i;
 const EPISODE_CODE = /\bS(\d{1,2})\s?E(\d{1,3})(?:-?E?(\d{1,3}))?\b/i;
@@ -51,9 +56,9 @@ const EPISODE_CODE_X = /\b(\d{1,2})x(\d{2,3})\b/i;
 export function isExtra(relativePath: string): boolean {
   const segments = splitPath(relativePath);
   const stem = stripExtension(segments[segments.length - 1] ?? '');
-  const folders = segments.slice(0, -1);
+  const subFolders = segments.slice(1, -1);
   return (
-    folders.some((folder) => EXTRA_FOLDERS.has(folder.toLowerCase())) ||
+    subFolders.some((folder) => EXTRA_FOLDERS.has(folder.toLowerCase())) ||
     EXTRA_SUFFIX.test(stem) ||
     EXTRA_STEM.test(stem)
   );
@@ -76,7 +81,7 @@ function parseFilm(stem: string, folders: readonly string[]): ParsedName {
   const match = fromStem ?? fromFolder;
   const title = clean(match?.[1] ?? tags.rest);
   const year = match ? Number(match[2]) : null;
-  const edition = tags.edition ?? editionAfter(tags.rest, match);
+  const edition = tags.edition ?? editionAfter(tags.rest, fromStem);
   return {
     kind: 'film',
     title: title === '' ? stem : title,
@@ -134,14 +139,16 @@ function parseEpisode(stem: string, folders: readonly string[]): ParsedName {
       part: tags.part,
     };
   }
-  const title = clean(titleBeforeCode) || showTitle || stem;
+  // The show folder is the Plex / Jellyfin source of truth; the file prefix is a fallback.
+  const title = showTitle || clean(titleBeforeCode) || stem;
   return {
     kind: 'episode',
     title,
     year: show ? Number(show[2]) : null,
     season,
     episode,
-    episodeEnd,
+    episodeEnd:
+      episodeEnd !== null && episode !== null && episodeEnd <= episode ? null : episodeEnd,
     providerIds,
     edition: tags.edition,
     part: tags.part,
@@ -167,11 +174,12 @@ function extractTags(stem: string): Tags {
   };
 }
 
-function editionAfter(rest: string, match: RegExpExecArray | null): string | null {
-  if (!match) return null;
-  const tail = rest.slice(match.index + match[0].length);
-  const edition = EDITION_SUFFIX.exec(tail);
-  return edition ? clean(edition[1] ?? '') || null : null;
+/** Jellyfin ` - Label` after the year of the file stem, unless it is a resolution label. */
+function editionAfter(rest: string, fromStem: RegExpExecArray | null): string | null {
+  if (!fromStem) return null;
+  const tail = rest.slice(fromStem.index + fromStem[0].length);
+  const label = clean(EDITION_SUFFIX.exec(tail)?.[1] ?? '');
+  return label === '' || RESOLUTION_LABEL.test(label) ? null : label;
 }
 
 function collectProviderIds(text: string): ProviderIds {

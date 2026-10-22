@@ -42,12 +42,15 @@ Quality commands: `pnpm typecheck` · `pnpm lint` · `pnpm format:check` · `pnp
 
 ```bash
 curl -X POST localhost:3000/libraries -H 'content-type: application/json' \
-  -d '{"name":"Films","rootPath":"/absolute/path/to/films","kind":"films"}'
+  -d '{"name":"Films","rootPath":"/absolute/path/under/MEDIA_ROOT/films","kind":"films"}'
 curl -X POST localhost:3000/libraries/<id>/scan     # {added, updated, removed, skipped[]}
 curl localhost:3000/libraries/<id>/media            # films / episodes with their streams
 ```
 
-File names follow the Plex / Jellyfin conventions (`Title (2019).mkv`,
+`ffprobe` (FFmpeg) must be installed. A library root must be `MEDIA_ROOT` or a folder under
+it (default `./media`), and the server listens on `127.0.0.1` unless `HOST` says otherwise:
+the API has no authentication yet. A scan never prunes rows while a sub-directory is
+unreadable or the root is empty (unmounted volume). File names follow the Plex / Jellyfin conventions (`Title (2019).mkv`,
 `Show/Season 01/Show S01E02.mkv`, optional `[tmdbid-…]` tags); the full list is in
 [docs/architecture/specs/library-scan.md](docs/architecture/specs/library-scan.md).
 Database migrations live in `apps/server/drizzle` (`pnpm --filter @popcorno/server exec

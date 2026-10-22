@@ -6,6 +6,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as schema from './schema.js';
 
+/** Drizzle handle over better-sqlite3 with the full schema attached; what every repository receives. */
 export type AppDatabase = BetterSQLite3Database<typeof schema>;
 
 /** `apps/server/drizzle`, next to this module whether it runs from `src` or `dist`. */

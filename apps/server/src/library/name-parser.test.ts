@@ -21,6 +21,13 @@ describe('parseMediaName — films (Plex / Jellyfin conventions)', () => {
     expect(parseMediaName('1917 (2019).mkv', 'films')).toMatchObject({ title: '1917', year: 2019 });
   });
 
+  it('only accepts a plausible year in parentheses', () => {
+    expect(parseMediaName('Film (1080).mkv', 'films')).toMatchObject({
+      title: 'Film (1080)',
+      year: null,
+    });
+  });
+
   it('falls back to the movie folder when the file has no year', () => {
     expect(parseMediaName('Amélie (2001)/Amélie.mp4', 'films')).toMatchObject({
       title: 'Amélie',
@@ -51,10 +58,34 @@ describe('parseMediaName — films (Plex / Jellyfin conventions)', () => {
     });
   });
 
-  it('reads multi-part suffixes', () => {
-    expect(parseMediaName('Lawrence (1962)-cd1.mkv', 'films')).toMatchObject({ part: 1 });
-    expect(parseMediaName('Lawrence (1962) part2.mkv', 'films')).toMatchObject({ part: 2 });
-    expect(parseMediaName('Lawrence (1962).disc b.mkv', 'films')).toMatchObject({ part: 2 });
+  it('does not take a resolution label or the folder suffix as an edition', () => {
+    expect(parseMediaName('Heat (1995) - 1080p.mkv', 'films')).toMatchObject({ edition: null });
+    expect(parseMediaName('Heat (1995) - 4K.mkv', 'films')).toMatchObject({ edition: null });
+    expect(parseMediaName('Heat (1995) - Remastered/Heat.mkv', 'films')).toMatchObject({
+      title: 'Heat',
+      year: 1995,
+      edition: null,
+    });
+  });
+
+  it.each([
+    ['Lawrence (1962)-cd1.mkv', 1],
+    ['Lawrence (1962) part2.mkv', 2],
+    ['Lawrence (1962).disc b.mkv', 2],
+  ])('reads the multi-part suffix of %s', (name, part) => {
+    expect(parseMediaName(name, 'films')).toMatchObject({ part });
+  });
+
+  it('needs a separator before a part keyword', () => {
+    expect(parseMediaName('Concept2 (2020).mkv', 'films')).toMatchObject({
+      title: 'Concept2',
+      year: 2020,
+      part: null,
+    });
+    expect(parseMediaName('Concept2.mkv', 'films')).toMatchObject({
+      title: 'Concept2',
+      part: null,
+    });
   });
 
   it('keeps an unknown name as a film with the stem and no year (spec 5a)', () => {
@@ -80,14 +111,25 @@ describe('parseMediaName — series', () => {
     });
   });
 
-  it('reads episode ranges in the three accepted spellings', () => {
-    for (const name of ['S01E02-E03', 'S01E02E03', 's01e02-03']) {
-      expect(parseMediaName(`Show/Season 01/Show ${name}.mkv`, 'series')).toMatchObject({
-        season: 1,
-        episode: 2,
-        episodeEnd: 3,
-      });
-    }
+  it.each(['S01E02-E03', 'S01E02E03', 's01e02-03'])('reads the episode range %s', (code) => {
+    expect(parseMediaName(`Show/Season 01/Show ${code}.mkv`, 'series')).toMatchObject({
+      season: 1,
+      episode: 2,
+      episodeEnd: 3,
+    });
+  });
+
+  it('drops a range that ends before it starts', () => {
+    expect(parseMediaName('Show/Season 01/Show S01E05-02.mkv', 'series')).toMatchObject({
+      episode: 5,
+      episodeEnd: null,
+    });
+  });
+
+  it('prefers the show folder over the text before the episode code', () => {
+    expect(parseMediaName('Dark/Season 01/Dark.2017.S01E01.mkv', 'series')).toMatchObject({
+      title: 'Dark',
+    });
   });
 
   it('takes the series name from the show folder when the file has none', () => {
@@ -126,12 +168,12 @@ describe('parseMediaName — series', () => {
     });
   });
 
-  it('returns unknown when no code and no season folder exist', () => {
-    expect(parseMediaName('Show/Random clip.mkv', 'series')).toMatchObject({
-      kind: 'unknown',
-      title: 'Random clip',
-    });
-  });
+  it.each(['Show/Random clip.mkv', 'Show/Show - 2011-11-15.mkv', 'Show/Show 042.mkv'])(
+    'returns unknown for the unsupported form %s (still playable)',
+    (name) => {
+      expect(parseMediaName(name, 'series')).toMatchObject({ kind: 'unknown', season: null });
+    },
+  );
 
   it('uses the stem when nothing else names the episode', () => {
     expect(parseMediaName('S01E02.mkv', 'series')).toMatchObject({ title: 'S01E02', season: 1 });
@@ -139,16 +181,24 @@ describe('parseMediaName — series', () => {
 });
 
 describe('isExtra', () => {
-  it('detects extras folders and suffixes', () => {
-    expect(isExtra('Matrix (1999)/extras/Making of.mkv')).toBe(true);
-    expect(isExtra('Matrix (1999)/Behind The Scenes/clip.mkv')).toBe(true);
-    expect(isExtra('Matrix (1999)/Matrix (1999)-trailer.mkv')).toBe(true);
-    expect(isExtra('Matrix (1999)/Preview.sample.mkv')).toBe(true);
-    expect(isExtra('Matrix (1999)/trailer.mp4')).toBe(true);
+  it.each([
+    'Matrix (1999)/extras/Making of.mkv',
+    'Matrix (1999)/Behind The Scenes/clip.mkv',
+    'Matrix (1999)/Matrix (1999)-trailer.mkv',
+    'Matrix (1999)/Preview.sample.mkv',
+    'Matrix (1999)/trailer.mp4',
+    'Show/Season 01/Show S01E01_clip.mkv',
+  ])('detects the extra %s', (path) => {
+    expect(isExtra(path)).toBe(true);
   });
 
-  it('keeps regular files', () => {
-    expect(isExtra('Matrix (1999)/Matrix (1999).mkv')).toBe(false);
-    expect(isExtra('Show/Season 01/Show S01E01.mkv')).toBe(false);
+  it.each([
+    'Matrix (1999)/Matrix (1999).mkv',
+    'Show/Season 01/Show S01E01.mkv',
+    'The Other.mkv',
+    'Hot Clip (2019).mkv',
+    'Shorts/A Short (2019).mkv',
+  ])('keeps the regular file %s', (path) => {
+    expect(isExtra(path)).toBe(false);
   });
 });

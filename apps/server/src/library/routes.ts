@@ -1,31 +1,44 @@
-import { isAbsolute } from 'node:path';
+import { isAbsolute, resolve } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import type { ApiError, Library, Media, ScanReport } from '@popcorno/shared';
+import { LIBRARY_KINDS } from '@popcorno/shared';
+import type { ApiError, ApiErrorCode, Library, Media, ScanReport } from '@popcorno/shared';
+import { resolveUnderRoot } from './path-guard.js';
 import type { LibraryRepository } from './repository.js';
 import { RootUnreadableError, ScanRunningError } from './scanner.js';
 import type { LibraryScanner } from './scanner.js';
 
-const createLibraryBody = z.object({
-  name: z.string().trim().min(1).max(200),
-  rootPath: z.string().min(1).refine(isAbsolute, 'rootPath must be absolute'),
-  kind: z.enum(['films', 'series']),
-});
-
 const libraryParams = z.object({ id: z.uuid() });
 
+/** What the library routes need; built by `buildApp`, replaced by tests at will. */
 export interface LibraryRoutesDeps {
   readonly repository: LibraryRepository;
   readonly scanner: LibraryScanner;
+  /** Absolute folder every `rootPath` must equal or live under (`ServerConfig.mediaRoot`). */
+  readonly mediaRoot: string;
 }
 
-/** `POST /libraries`, `GET /libraries`, `POST /libraries/:id/scan`, `GET /libraries/:id/media`. */
+/**
+ * `POST /libraries` (201 | 400 `invalid_request`), `GET /libraries`,
+ * `POST /libraries/:id/scan` (200 | 400 | 404 `library_not_found` | 409 `root_unreadable` /
+ * `scan_running`), `GET /libraries/:id/media` (200 | 400 | 404).
+ */
 export function registerLibraryRoutes(app: FastifyInstance, deps: LibraryRoutesDeps): void {
+  const createLibraryBody = z.object({
+    name: z.string().trim().min(1).max(200),
+    rootPath: z
+      .string()
+      .min(1)
+      .max(4096)
+      .refine(isAbsolute, 'rootPath must be absolute')
+      .transform((path) => underMediaRoot(deps.mediaRoot, path))
+      .refine((path) => path !== null, 'rootPath must be under MEDIA_ROOT'),
+    kind: z.enum(LIBRARY_KINDS),
+  });
+
   app.post('/libraries', async (request, reply) => {
     const body = createLibraryBody.safeParse(request.body);
-    if (!body.success) {
-      return reply.code(400).send(invalid(body.error.issues));
-    }
+    if (!body.success) return reply.code(400).send(invalid(body.error.issues));
     const library: Library = deps.repository.createLibrary(body.data);
     return reply.code(201).send(library);
   });
@@ -54,6 +67,12 @@ export function registerLibraryRoutes(app: FastifyInstance, deps: LibraryRoutesD
   });
 }
 
+/** The normalised absolute path when it is the media root or under it, else null. */
+function underMediaRoot(mediaRoot: string, path: string): string | null {
+  const normalised = resolve(path);
+  return normalised === mediaRoot ? normalised : resolveUnderRoot(mediaRoot, normalised);
+}
+
 type Loaded =
   | { readonly ok: true; readonly value: Library }
   | { readonly ok: false; readonly status: 400 | 404; readonly body: ApiError };
@@ -66,10 +85,14 @@ function loadLibrary(params: unknown, repository: LibraryRepository): Loaded {
   return { ok: true, value: library };
 }
 
-function invalid(details: unknown): ApiError {
-  return { error: 'invalid_request', details };
+/** Only the path and message of each zod issue: enough for a client, nothing internal. */
+function invalid(issues: readonly z.core.$ZodIssue[]): ApiError {
+  return {
+    error: 'invalid_request',
+    details: issues.map(({ path, message }) => ({ path, message })),
+  };
 }
 
-function apiError(error: string): ApiError {
+function apiError(error: ApiErrorCode): ApiError {
   return { error };
 }

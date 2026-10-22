@@ -8,6 +8,13 @@
       "when": 1792705062280,
       "tag": "0000_library-scan",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1792707378617,
+      "tag": "0001_media-relative-path",
+      "breakpoints": true
     }
   ]
 }

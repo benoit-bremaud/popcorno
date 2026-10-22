@@ -6,31 +6,38 @@ export interface HealthResponse {
   readonly version: string;
 }
 
+/** Library kinds, single source for the zod schema and the SQLite enum. */
+export const LIBRARY_KINDS = ['films', 'series'] as const;
+
 /** What a library folder contains; drives the name parser (ADR-0002). */
-export type LibraryKind = 'films' | 'series';
+export type LibraryKind = (typeof LIBRARY_KINDS)[number];
 
 /** A media folder registered by the owner (UC1). */
 export interface Library {
   readonly id: string;
   readonly name: string;
+  /** Absolute path, always under the server's `MEDIA_ROOT`. */
   readonly rootPath: string;
   readonly kind: LibraryKind;
 }
 
 /** Body of `POST /libraries`. */
-export interface CreateLibraryBody {
-  readonly name: string;
-  readonly rootPath: string;
-  readonly kind: LibraryKind;
-}
+export type CreateLibraryBody = Omit<Library, 'id'>;
+
+/** Media kinds, single source for the SQLite enum. */
+export const MEDIA_KINDS = ['film', 'episode', 'series', 'unknown'] as const;
 
 /**
  * What a file turned out to be. `series` rows have no file of their own and group the
  * episodes; `unknown` is a playable file whose name matched no convention (spec 5a).
  */
-export type MediaKind = 'film' | 'episode' | 'series' | 'unknown';
+export type MediaKind = (typeof MEDIA_KINDS)[number];
 
-export type StreamType = 'video' | 'audio' | 'subtitle';
+/** Stream types the scanner keeps from ffprobe (attachments and data streams are dropped). */
+export const STREAM_TYPES = ['video', 'audio', 'subtitle'] as const;
+
+/** Kind of a technical stream of a file. */
+export type StreamType = (typeof STREAM_TYPES)[number];
 
 /** One technical stream of a file, as reported by ffprobe. */
 export interface StreamInfo {
@@ -54,8 +61,8 @@ export interface Media {
   readonly kind: MediaKind;
   readonly title: string;
   readonly year: number | null;
-  /** Absolute path; null for a `series` row. Always resolves under the library root. */
-  readonly filePath: string | null;
+  /** Path relative to the library root, `/`-separated; null for a `series` row. */
+  readonly relativePath: string | null;
   readonly durationSec: number | null;
   readonly season: number | null;
   readonly episode: number | null;
@@ -71,6 +78,7 @@ export interface Media {
 /** Why a file was left out of the library during a scan (spec extensions). */
 export type SkipReason = 'unreadable' | 'outside_root' | 'probe_failed' | 'extra';
 
+/** One entry of `ScanReport.skipped`: the relative path and why it was left out. */
 export interface SkippedFile {
   readonly path: string;
   readonly reason: SkipReason;
@@ -84,8 +92,12 @@ export interface ScanReport {
   readonly skipped: readonly SkippedFile[];
 }
 
+/** Stable error codes of every non-2xx response. */
+export type ApiErrorCode =
+  'invalid_request' | 'library_not_found' | 'root_unreadable' | 'scan_running' | 'internal';
+
 /** Error body of every non-2xx response. */
 export interface ApiError {
-  readonly error: string;
+  readonly error: ApiErrorCode;
   readonly details?: unknown;
 }

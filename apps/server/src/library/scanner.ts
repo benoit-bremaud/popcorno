@@ -1,11 +1,13 @@
+import type { Dirent } from 'node:fs';
 import { readdir, realpath, stat } from 'node:fs/promises';
-import { join, relative } from 'node:path';
-import type { Library, ScanReport, SkippedFile } from '@popcorno/shared';
+import { extname, join, relative, sep } from 'node:path';
+import type { Library, ScanReport, SkipReason, SkippedFile } from '@popcorno/shared';
 import type { Prober } from './ffprobe.js';
 import { isExtra, parseMediaName } from './name-parser.js';
 import { resolveUnderRoot } from './path-guard.js';
-import type { LibraryRepository, MediaInput } from './repository.js';
+import type { LibraryRepository } from './repository.js';
 
+/** Video containers the walk keeps (spec § Technology and data variations); lower-case, with the dot. */
 export const SUPPORTED_EXTENSIONS: ReadonlySet<string> = new Set([
   '.mkv',
   '.mp4',
@@ -23,6 +25,23 @@ export class RootUnreadableError extends Error {
   }
 }
 
+/** Thrown when a scan of the same library is already in flight (spec extension *a). */
+export class ScanRunningError extends Error {
+  constructor(libraryId: string) {
+    super(`A scan of library ${libraryId} is already running`);
+    this.name = 'ScanRunningError';
+  }
+}
+
+/** A file found under the root: its real path (the guard's result) and fingerprint. */
+interface LocatedFile {
+  readonly realPath: string;
+  readonly fileSize: number;
+  readonly fileMtimeMs: number;
+}
+
+type StoreOutcome = 'added' | 'updated' | 'unchanged' | 'probe_failed';
+
 /** Walks the library root and persists what it finds (sequence diagram 02-scan-library). */
 export class LibraryScanner {
   private readonly running = new Set<string>();
@@ -32,10 +51,11 @@ export class LibraryScanner {
     private readonly probe: Prober,
   ) {}
 
-  isRunning(libraryId: string): boolean {
-    return this.running.has(libraryId);
-  }
-
+  /**
+   * Runs UC1 on one library and returns its report.
+   * @throws {RootUnreadableError} when the root is missing or not a directory (spec 2b).
+   * @throws {ScanRunningError} when a scan of the same library is in flight (spec *a).
+   */
   async scan(library: Library): Promise<ScanReport> {
     if (this.running.has(library.id)) throw new ScanRunningError(library.id);
     this.running.add(library.id);
@@ -47,72 +67,54 @@ export class LibraryScanner {
   }
 
   private async run(library: Library): Promise<ScanReport> {
-    const root = await this.realRoot(library.rootPath);
-    const skipped: SkippedFile[] = [];
-    const seen: string[] = [];
-    let added = 0;
-    let updated = 0;
+    const root = await realRoot(library.rootPath);
+    const { files, unreadableDirs } = await walk(root);
+    const skipped: SkippedFile[] = unreadableDirs.map((dir) => ({
+      path: toPosix(relative(root, dir)),
+      reason: 'unreadable',
+    }));
+    const seen = new Set<string>();
+    const counts = { added: 0, updated: 0 };
 
-    for (const filePath of await walk(root, skipped)) {
-      const outcome = await this.processFile(library, root, filePath, skipped);
-      if (outcome === 'skipped') continue;
-      seen.push(filePath);
-      if (outcome === 'added') added += 1;
-      if (outcome === 'updated') updated += 1;
+    for (const filePath of files) {
+      const relativePath = toPosix(relative(root, filePath));
+      const located = await locate(root, filePath);
+      if (typeof located === 'string') {
+        skipped.push({ path: relativePath, reason: located });
+        continue;
+      }
+      if (isExtra(relativePath)) {
+        skipped.push({ path: relativePath, reason: 'extra' });
+        continue;
+      }
+      // Seen as soon as it belongs to the library: a failed probe must not delete its row.
+      seen.add(located.realPath);
+      const outcome = await this.store(library, relativePath, located);
+      if (outcome === 'probe_failed') skipped.push({ path: relativePath, reason: outcome });
+      else if (outcome !== 'unchanged') counts[outcome] += 1;
     }
-    const removed = this.repository.deleteMissing(library.id, seen);
-    return { added, updated, removed, skipped };
+    // Pruning is only safe when the walk saw the whole tree and the root is not an empty
+    // mount point: otherwise present files would be deleted (and their future metadata).
+    const canPrune = unreadableDirs.length === 0 && files.length > 0;
+    const removed = canPrune ? this.repository.deleteMissing(library.id, seen) : 0;
+    return { ...counts, removed, skipped };
   }
 
-  private async realRoot(rootPath: string): Promise<string> {
-    try {
-      const root = await realpath(rootPath);
-      if (!(await stat(root)).isDirectory()) throw new RootUnreadableError(rootPath);
-      return root;
-    } catch {
-      throw new RootUnreadableError(rootPath);
-    }
-  }
-
-  private async processFile(
+  private async store(
     library: Library,
-    root: string,
-    filePath: string,
-    skipped: SkippedFile[],
-  ): Promise<'added' | 'updated' | 'unchanged' | 'skipped'> {
-    const relativePath = relative(root, filePath);
-    if (isExtra(relativePath)) {
-      skipped.push({ path: relativePath, reason: 'extra' });
-      return 'skipped';
+    relativePath: string,
+    file: LocatedFile,
+  ): Promise<StoreOutcome> {
+    const stored = this.repository.findStoredFile(library.id, file.realPath);
+    if (stored?.fileSize === file.fileSize && stored.fileMtimeMs === file.fileMtimeMs) {
+      return 'unchanged';
     }
-    let real: string;
-    let size: number;
-    let mtimeMs: number;
+    let probed: Awaited<ReturnType<Prober>>;
     try {
-      real = await realpath(filePath);
-      const info = await stat(real);
-      size = info.size;
-      mtimeMs = Math.round(info.mtimeMs);
+      probed = await this.probe(file.realPath);
     } catch {
-      skipped.push({ path: relativePath, reason: 'unreadable' });
-      return 'skipped';
+      return 'probe_failed';
     }
-    if (resolveUnderRoot(root, real) === null) {
-      skipped.push({ path: relativePath, reason: 'outside_root' });
-      return 'skipped';
-    }
-
-    const stored = this.repository.findStoredFile(library.id, filePath);
-    if (stored && stored.fileSize === size && stored.fileMtimeMs === mtimeMs) return 'unchanged';
-
-    let probed;
-    try {
-      probed = await this.probe(filePath);
-    } catch {
-      skipped.push({ path: relativePath, reason: 'probe_failed' });
-      return 'skipped';
-    }
-
     const parsed = parseMediaName(relativePath, library.kind);
     const seriesId =
       parsed.kind === 'episode'
@@ -123,57 +125,68 @@ export class LibraryScanner {
             parsed.providerIds,
           )
         : null;
-    const input: MediaInput = {
-      kind: parsed.kind,
-      title: parsed.title,
-      year: parsed.year,
-      filePath,
-      fileSize: size,
-      fileMtimeMs: mtimeMs,
-      durationSec: probed.durationSec,
-      season: parsed.season,
-      episode: parsed.episode,
-      episodeEnd: parsed.episodeEnd,
-      seriesId,
-      providerIds: parsed.providerIds,
-      edition: parsed.edition,
-      part: parsed.part,
-    };
-    this.repository.upsertMedia(library.id, input, probed.streams);
+    this.repository.upsertMedia(
+      library.id,
+      {
+        ...parsed,
+        filePath: file.realPath,
+        relativePath,
+        fileSize: file.fileSize,
+        fileMtimeMs: file.fileMtimeMs,
+        durationSec: probed.durationSec,
+        seriesId,
+      },
+      probed.streams,
+    );
     return stored ? 'updated' : 'added';
   }
 }
 
-/** Thrown when a scan of the same library is already in flight (spec extension *a). */
-export class ScanRunningError extends Error {
-  constructor(libraryId: string) {
-    super(`A scan of library ${libraryId} is already running`);
-    this.name = 'ScanRunningError';
+async function realRoot(rootPath: string): Promise<string> {
+  const info = await stat(rootPath).catch(() => null);
+  if (!info?.isDirectory()) throw new RootUnreadableError(rootPath);
+  return realpath(rootPath);
+}
+
+/** Resolves and fingerprints one file; a dangling link is `unreadable`, an escape `outside_root`. */
+async function locate(root: string, filePath: string): Promise<LocatedFile | SkipReason> {
+  let realPath: string;
+  let fileSize: number;
+  let fileMtimeMs: number;
+  try {
+    realPath = await realpath(filePath);
+    const info = await stat(realPath);
+    fileSize = info.size;
+    fileMtimeMs = Math.round(info.mtimeMs);
+  } catch {
+    return 'unreadable';
   }
+  if (resolveUnderRoot(root, realPath) === null) return 'outside_root';
+  return { realPath, fileSize, fileMtimeMs };
+}
+
+interface WalkResult {
+  readonly files: string[];
+  readonly unreadableDirs: string[];
 }
 
 /** Recursive walk; an unreadable directory is reported and its siblings continue (spec 3a). */
-async function walk(dir: string, skipped: SkippedFile[], root = dir): Promise<string[]> {
-  let entries;
+async function walk(dir: string, result: WalkResult = { files: [], unreadableDirs: [] }) {
+  let entries: Dirent[];
   try {
     entries = await readdir(dir, { withFileTypes: true });
   } catch {
-    skipped.push({ path: relative(root, dir) || '.', reason: 'unreadable' });
-    return [];
+    result.unreadableDirs.push(dir);
+    return result;
   }
-  const files: string[] = [];
   for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
     const full = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...(await walk(full, skipped, root)));
-    } else if (SUPPORTED_EXTENSIONS.has(extensionOf(entry.name))) {
-      files.push(full);
-    }
+    if (entry.isDirectory()) await walk(full, result);
+    else if (SUPPORTED_EXTENSIONS.has(extname(entry.name).toLowerCase())) result.files.push(full);
   }
-  return files;
+  return result;
 }
 
-function extensionOf(name: string): string {
-  const dot = name.lastIndexOf('.');
-  return dot > 0 ? name.slice(dot).toLowerCase() : '';
+function toPosix(path: string): string {
+  return sep === '/' ? path : path.split(sep).join('/');
 }

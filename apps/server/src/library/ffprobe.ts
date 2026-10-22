@@ -10,7 +10,10 @@ export interface ProbeResult {
   readonly streams: readonly StreamInfo[];
 }
 
-/** Single process egress of the library domain (component diagram): injected into the scanner. */
+/**
+ * Single process egress of the library domain (component diagram): injected into the
+ * scanner. Rejects when ffprobe exits non-zero, times out or prints invalid JSON.
+ */
 export type Prober = (filePath: string) => Promise<ProbeResult>;
 
 interface FfprobeStream {
@@ -27,14 +30,19 @@ interface FfprobeOutput {
 }
 
 const PROBE_TIMEOUT_MS = 30_000;
+/** ffprobe JSON for a file with many streams stays well under this. */
+const PROBE_MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
 
-/** Builds a prober that runs `ffprobe -print_format json` on each file. */
+/**
+ * Builds a prober that runs `ffprobe -print_format json` on each file. The path is
+ * passed as the `-i` argument, so a name starting with `-` cannot become an option.
+ */
 export function createFfprobe(ffprobePath: string): Prober {
   return async (filePath) => {
     const { stdout } = await execFileAsync(
       ffprobePath,
-      ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', filePath],
-      { timeout: PROBE_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024 },
+      ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', '-i', filePath],
+      { timeout: PROBE_TIMEOUT_MS, killSignal: 'SIGKILL', maxBuffer: PROBE_MAX_OUTPUT_BYTES },
     );
     return parseFfprobeOutput(JSON.parse(stdout) as FfprobeOutput);
   };

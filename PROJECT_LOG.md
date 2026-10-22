@@ -20,6 +20,20 @@ context: merged PRs, decisions, tags, infra events. Not a release changelog — 
   coverage 95.7 % lines / 90.9 % branches (threshold 80 % in `vitest.config.ts`).
 - **QA** — real server + `ffprobe 8.0.1` on a generated fixture (corrupt file, extras folder,
   symlink to `/etc`): `docs/architecture/qa/2026-10-22-issue-3-library-scan/`.
+- **Local review (2026-10-23, `review-local` on 57d355c)** — five dimensions reconciled in
+  `docs/architecture/review-local.md`: 6 Must, 14 Should, 12 Nice. Gate RED on doc
+  coverage (78 %) and the Must list. All Must + Should applied: a present file is never
+  pruned (seen before probing; no pruning while a directory is unreadable or the root is
+  empty), the guard's real path is what gets probed and stored, pruning diff in JS with
+  chunked deletes (SQLite bind limit), **owner decision Must 4 (MCDA A 440/500)**: library
+  roots confined under `MEDIA_ROOT`, `HOST` defaults to `127.0.0.1` (Docker sets
+  `0.0.0.0`), API exposes `relativePath` instead of the absolute path, generic 500
+  handler, series keyed by title + year, parser regex fixes (part separator, plausible
+  year, anchored edition suffix, resolution labels, extras only below the title folder,
+  show folder wins), `as const` kind lists shared by zod and Drizzle, JSON column mode,
+  docs re-aligned (ADR-0002 arithmetic 445 → 455, diagrams 02/03/04, spec). Migration
+  `0001_media-relative-path` adds the column. Tests 37 → 82, coverage 97.7 % stmts /
+  95.1 % branches. Nice items filed as a follow-up issue.
 
 ## 2026-10-22 — Project bootstrap
 
