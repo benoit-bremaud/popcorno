@@ -32,8 +32,12 @@ context: merged PRs, decisions, tags, infra events. Not a release changelog — 
   year, anchored edition suffix, resolution labels, extras only below the title folder,
   show folder wins), `as const` kind lists shared by zod and Drizzle, JSON column mode,
   docs re-aligned (ADR-0002 arithmetic 445 → 455, diagrams 02/03/04, spec). Migration
-  `0001_media-relative-path` adds the column. Tests 37 → 82, coverage 97.7 % stmts /
-  95.1 % branches. Nice items filed as a follow-up issue.
+  `0001_media-relative-path` adds the column. SonarQube then failed on 7 new code smells
+  (regex backtracking, cognitive complexity, `await` in a loop) — cleared in `f5788f3`
+  (gate PASSED, 0 issue). Tests 37 → 82, coverage 98.0 % stmts / 95.0 % branches, doc
+  coverage 100 %. Second QA pass `qa/2026-10-23-issue-3-library-scan-r2/`. Nice items
+  filed as a follow-up issue. Gotcha: pass the SonarQube token through an exported
+  variable, not `VAR=… cmd -D…="$VAR"` (zsh expands the argument first → 401).
 
 ## 2026-10-22 — Project bootstrap
 

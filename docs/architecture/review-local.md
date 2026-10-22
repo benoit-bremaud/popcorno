@@ -1,10 +1,24 @@
 # Local review — popcorno (issue #3 library scan)
 
 - Date: 2026-10-23
-- Commit: 57d355c
+- Commit reviewed: 57d355c · fixes: 8ba4f3a (review findings) + f5788f3 (SonarQube findings)
 - Scope: branch diff `main...HEAD` (35 files, apps/server + packages/shared + docs)
 - Checks run: design (two independent passes) · docs · tests · security · correctness
-- Verdict: **fix Must Have first** · Must 6 · Should 14 · Nice 12
+- Verdict at review time: **fix Must Have first** · Must 6 · Should 14 · Nice 12
+- Resolution: every Must and Should applied in 8ba4f3a (owner decision on Must 4: option A,
+  MCDA 440/500); Nice items filed as a follow-up issue; Disagree items kept as designed.
+
+## Pre-merge gate re-run (code SHA f5788f3; later commits are docs / QA evidence only)
+
+| Step        | Result                                                                                                        |
+| ----------- | ------------------------------------------------------------------------------------------------------------- |
+| 1 Tests     | ✅ 82 unit/integration (Vitest, 7 files) · no E2E suite yet (Playwright planned)                              |
+| 2 Coverage  | tests ✅ 98.0 % stmts / 95.0 % branches / 94.5 % funcs / 97.8 % lines (floor 80) · docs ✅ 100 % (43/43 exports, floor 90) |
+| 3 SonarQube | ✅ PASSED on f5788f3 (new code: 0 issue, 0 hotspot, 0 % duplication, 97.8 % coverage). The first scan on 8ba4f3a FAILED on 7 new code smells (two super-linear regexes, cognitive complexity 17, three `await` in a loop, object literal default) — all fixed in f5788f3, none waived |
+| 4 Secrets   | ✅ gitleaks clean (`main..HEAD` and `--all`) · only `.env.example` tracked · diff read: nothing sensitive       |
+| 5 QA pass   | ✅ full — real server on loopback + `ffprobe 8.0.1`, every route curled incl. `/etc` root rejected, idempotent re-scan, relative paths only, 0 server errors: `qa/2026-10-23-issue-3-library-scan-r2/` |
+
+- Gate: **GREEN — merge authorised** once the PR review is handled (CI, Copilot, owner approval).
 
 ## Pre-merge gate (head SHA 57d355c, before fixes)
 
@@ -16,7 +30,10 @@
 | 4 Secrets   | ✅ gitleaks clean (`main..HEAD` and `--all`) · only `.env.example` tracked · diff read: nothing sensitive       |
 | 5 QA pass   | ✅ full — real server + `ffprobe 8.0.1` on a generated fixture, every route curled, 0 server errors: `qa/2026-10-22-issue-3-library-scan/` |
 
-- Gate: **RED — step 2 (doc coverage) and the Must Have list below**; re-run on the fixed SHA.
+- Gate: **RED — step 2 (doc coverage) and the Must Have list below**; re-run above on the fixed SHA.
+- SonarQube note: the scanner's v2 bootstrap answered 401 when the token was passed as
+  `VAR=… sonar-scanner -Dsonar.token="$VAR"` (zsh expands the argument before the
+  assignment applies); `export` the variable first.
 
 ## 🔴 Must Have
 
