@@ -24,14 +24,22 @@ classDiagram
     +MediaKind kind
     +string title
     +int year
-    +string filePath
+    +string relativePath
     +int durationSec
+    +ProviderIds providerIds
+    +string edition
+    +int part
     +StreamInfo[] streams
   }
   class Episode {
     +int season
-    +int number
+    +int episode
+    +int episodeEnd
     +string seriesId
+  }
+  class ProviderIds {
+    +string tmdb
+    +string imdb
   }
   class StreamInfo {
     +StreamType type
@@ -58,6 +66,7 @@ classDiagram
   Library "1" o-- "*" Media
   Media <|-- Episode
   Media "1" *-- "*" StreamInfo
+  Media "1" *-- "1" ProviderIds
   Profile "1" o-- "*" WatchProgress
   Media "1" o-- "*" WatchProgress
   PlaybackDecider ..> StreamInfo
@@ -65,7 +74,11 @@ classDiagram
 
 ## Notes
 
-- `Episode` extends `Media` with its position in a series; a series is a `Media` of kind
-  `series` with no file of its own.
+- `Episode` extends `Media` with its position in a series (`episodeEnd` for a
+  multi-episode file); a series is a `Media` of kind `series` with no file of its own.
+- `relativePath` is what the API exposes; the real absolute path, the size and the
+  mtime live only in the `media` table (playback and re-scan fingerprint).
+- `providerIds`, `edition` and `part` come from the Plex / Jellyfin file-name tags
+  (spec UC1); `providerIds` is the hand-off to TMDB (UC2).
 - `WatchProgress.isFinished()` = position ≥ 90 % of duration; drives "next episode".
 - `PlaybackDecider` has no state; it is a function in a class box for UML readability.

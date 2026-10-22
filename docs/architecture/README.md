@@ -30,6 +30,8 @@ docs/architecture/
   README.md                 # this overview
   decisions/                # ADRs (MADR) — NNNN-kebab-title.md
   diagrams/<feature>/       # UML per feature: 01-use-case … 06-data-flow
+  specs/                    # textual use-case specifications (Cockburn)
+  qa/                       # QA pass evidence per issue
 ```
 
 ## Features
@@ -43,3 +45,9 @@ docs/architecture/
 | ADR                                        | Title                          | Status   |
 | ------------------------------------------ | ------------------------------ | -------- |
 | [0001](decisions/0001-all-typescript-stack.md) | All-TypeScript pnpm monorepo | accepted |
+| [0002](decisions/0002-file-naming-parser.md) | File-naming parser: own regex parser | accepted |
+
+## Specifications and QA
+
+- `specs/<feature>.md` — textual Cockburn use-case specs ([library-scan](specs/library-scan.md)).
+- `qa/<date>-issue-<n>-<slug>/` — QA pass outputs kept as merge evidence.

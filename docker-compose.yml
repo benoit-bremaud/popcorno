@@ -6,6 +6,10 @@ services:
       - '3000:3000'
     env_file:
       - .env.local
+    environment:
+      # Container-side values; they win over .env.local, whose MEDIA_ROOT is the host folder.
+      HOST: 0.0.0.0
+      MEDIA_ROOT: /app/media
     volumes:
       - popcorno-data:/app/data
       # Point this at your own media folder; read-only is enough for playback.
