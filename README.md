@@ -31,7 +31,7 @@ Runtime: Node ≥ 22, pnpm, FFmpeg on the host (or in the Docker image), SQLite 
 ```bash
 pnpm install
 cp .env.example .env.local   # fill in TMDB_API_KEY
-pnpm dev:server              # http://localhost:3000  (GET /health)
+pnpm dev:server              # http://localhost:3000  (GET /health); builds packages/shared first
 pnpm dev:web                 # http://localhost:5173
 ```
 

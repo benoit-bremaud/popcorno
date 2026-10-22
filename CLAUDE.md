@@ -48,7 +48,10 @@ spacing / typography, tests with every feature (Vitest unit, Playwright e2e late
 ## Useful commands
 
 - `pnpm install` — install the workspace (`better-sqlite3` and `esbuild` builds allowed).
-- `pnpm dev:server` — Fastify API on <http://localhost:3000> (`GET /health`).
+- `pnpm dev:server` — Fastify API on <http://localhost:3000> (`GET /health`). Builds
+  `packages/shared` first: its `exports` point types at `src/` and the runtime at `dist/`
+  (Node refuses to strip types under `node_modules`, which is where the Docker image puts
+  it). Re-run after editing the shared contracts; tests alias `src/` and need no build.
 - `pnpm dev:web` — Vite dev server on <http://localhost:5173> (`/api` proxied to the server).
 - `pnpm typecheck` · `pnpm lint` · `pnpm format:check` · `pnpm test` · `pnpm coverage` ·
   `pnpm build`.

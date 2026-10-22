@@ -17,8 +17,10 @@ COPY apps/server/package.json apps/server/
 RUN pnpm install --frozen-lockfile --filter @popcorno/server...
 COPY packages/shared packages/shared
 COPY apps/server apps/server
-RUN pnpm --filter @popcorno/server build \
-  && pnpm --filter @popcorno/server --prod deploy /out
+# --legacy: pnpm 10 only deploys injected workspaces by default; the workspace keeps plain
+# links so edits to packages/shared are seen live in dev (no injected hard-link copies).
+RUN pnpm --filter @popcorno/server... build \
+  && pnpm --filter @popcorno/server --prod deploy --legacy /out
 
 FROM node:22.21.1-bookworm-slim
 # ffmpeg comes from Debian stable: pinned by the base image tag, patched by Dependabot bumps.
