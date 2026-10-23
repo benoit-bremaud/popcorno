@@ -4,6 +4,28 @@ Chronological operational logbook (newest first). Complements `git log` with the
 context: merged PRs, decisions, tags, infra events. Not a release changelog — that is
 `CHANGELOG.md`.
 
+## 2026-10-23 — #7 direct play (PR #22 merged, `aadad38`)
+
+- **Conception** — the spec `docs/architecture/specs/direct-play.md` and the sequence
+  `02-sequence-direct-play.md` are in place, and the component diagram is updated.
+  ADR-0005 is owner-validated: a pure `decidePlayback` in shared fed by `canPlayType`
+  (A 485 vs session 375), and an own single-range route (A 475 vs `@fastify/send` 355).
+- **Implementation** — `GET /media/:id/file` answers 200, 206, 416 or 404
+  `media_not_found`. The path guard re-runs on every request, then the file is opened
+  once with `O_NOFOLLOW` and streamed from that handle. A malformed or multi-range header
+  gets 200 (RFC 9110). `isAtOrUnderRoot` is now shared. The web gets a Play button in
+  `DetailDialog`, one per episode for a series, and a native `<video>` player in a nested
+  `<dialog>`. React propagates `close`, so the detail dialog guards it.
+- **Gate** — 16 shared + 191 server + 42 web tests, coverage ≥ 98 %, gitleaks clean,
+  CI 9/9. QA: play and seek checked in Chromium and Firefox
+  (`qa/2026-10-23-issue-7-direct-play/`). Codex hit its quota, so the owner asked for a
+  local `/code-review` (high) instead. It found no bug and 2 cleanups, both applied.
+- **Owner decisions** — the empty `<track>` was dropped and S4084 accepted in SonarQube
+  (B 380), and SonarQube then PASSED. The per-request guard cost is kept (A 450).
+  Squash-merged with owner approval.
+- **Filed** — #23 (direct-play follow-ups: ETag/If-Range, HEAD, bit depth, autoplay hint)
+  and #24 (WebVTT subtitles).
+
 ## 2026-10-23 — #5 catalog grid (PR #20 merged, `b3a3afa`)
 
 - **Conception** — the spec `docs/architecture/specs/catalog-grid.md` covers a benchmark of
