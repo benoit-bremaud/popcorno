@@ -1,7 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, isNotNull, isNull, notExists, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
-import type { CreateLibraryBody, Library, Media, ProviderIds, StreamInfo } from '@popcorno/shared';
+import type {
+  CastMember,
+  CreateLibraryBody,
+  Genre,
+  Library,
+  Media,
+  MediaMetadata,
+  ProviderIds,
+  StreamInfo,
+} from '@popcorno/shared';
 import type { AppDatabase } from '../db/index.js';
 import { libraries, media, streams } from '../db/schema.js';
 import type { ParsedName } from './name-parser.js';
@@ -27,6 +36,10 @@ export interface StoredFile {
 
 /** SQLite binds at most 32 766 variables per statement; ids are deleted in chunks. */
 const DELETE_CHUNK = 500;
+
+function sameProviderIds(a: ProviderIds, b: ProviderIds): boolean {
+  return a.tmdb === b.tmdb && a.imdb === b.imdb;
+}
 
 const libraryColumns = {
   id: libraries.id,
@@ -72,40 +85,63 @@ export class LibraryRepository {
     );
   }
 
-  /** Finds the `series` row of a library by title and year, creating it on demand. */
+  /**
+   * Finds the `series` row of a library by parsed title and year, creating it on demand.
+   * The lookup uses `parsedTitle`, never `title`: TMDB may rename the series (ADR-0003) and
+   * a later episode must still join it. A tag parsed from the new episode's name that
+   * differs from the stored one wins (the owner's way to correct a wrong match) and queues
+   * the series for a new lookup.
+   */
   findOrCreateSeries(
     libraryId: string,
-    title: string,
+    parsedTitle: string,
     year: number | null,
     providerIds: ProviderIds,
   ): string {
     const existing = this.db
-      .select({ id: media.id })
+      .select({ id: media.id, providerIds: media.providerIds })
       .from(media)
       .where(
         and(
           eq(media.libraryId, libraryId),
           eq(media.kind, 'series'),
-          eq(media.title, title),
+          eq(media.parsedTitle, parsedTitle),
           year === null ? isNull(media.year) : eq(media.year, year),
         ),
       )
       .get();
-    if (existing) return existing.id;
+    if (existing) {
+      const tagged = Object.keys(providerIds).length > 0;
+      if (tagged && !sameProviderIds(existing.providerIds, providerIds)) {
+        this.db
+          .update(media)
+          .set({ providerIds, metadataFetchedAt: null })
+          .where(eq(media.id, existing.id))
+          .run();
+      }
+      return existing.id;
+    }
     const id = randomUUID();
-    this.db.insert(media).values({ id, libraryId, kind: 'series', title, year, providerIds }).run();
+    this.db
+      .insert(media)
+      .values({ id, libraryId, kind: 'series', title: parsedTitle, parsedTitle, year, providerIds })
+      .run();
     return id;
   }
 
   /** Inserts or replaces the row keyed by `(libraryId, filePath)` and its streams; returns the media id. */
   upsertMedia(libraryId: string, input: MediaInput, fileStreams: readonly StreamInfo[]): string {
     const id = randomUUID();
-    const values = { ...input, libraryId };
+    const values = { ...input, libraryId, parsedTitle: input.title };
     return this.db.transaction((tx) => {
       const inserted = tx
         .insert(media)
         .values({ id, ...values })
-        .onConflictDoUpdate({ target: [media.libraryId, media.filePath], set: values })
+        // A file the scan found changed may carry a new title, year or tag: look it up again.
+        .onConflictDoUpdate({
+          target: [media.libraryId, media.filePath],
+          set: { ...values, metadataFetchedAt: null },
+        })
         .returning({ id: media.id })
         .get();
       const mediaId = inserted?.id ?? id;
@@ -176,6 +212,17 @@ export class LibraryRepository {
         providerIds: media.providerIds,
         edition: media.edition,
         part: media.part,
+        tmdbId: media.tmdbId,
+        overview: media.overview,
+        genres: media.genres,
+        releaseDate: media.releaseDate,
+        runtimeMin: media.runtimeMin,
+        voteAverage: media.voteAverage,
+        voteCount: media.voteCount,
+        cast: media.cast,
+        posterPath: media.posterPath,
+        backdropPath: media.backdropPath,
+        metadataFetchedAt: media.metadataFetchedAt,
       })
       .from(media)
       .where(eq(media.libraryId, libraryId))
@@ -200,6 +247,53 @@ export class LibraryRepository {
       list.push(stream);
       streamsByMedia.set(mediaId, list);
     }
-    return rows.map((row) => ({ ...row, streams: streamsByMedia.get(row.id) ?? [] }));
+    return rows.map((row) => toMedia(row, streamsByMedia.get(row.id) ?? []));
   }
+}
+
+type MediaRow = Omit<Media, 'streams' | 'metadata'> & {
+  readonly tmdbId: number | null;
+  readonly overview: string | null;
+  readonly genres: readonly Genre[] | null;
+  readonly releaseDate: string | null;
+  readonly runtimeMin: number | null;
+  readonly voteAverage: number | null;
+  readonly voteCount: number | null;
+  readonly cast: readonly CastMember[] | null;
+  readonly posterPath: string | null;
+  readonly backdropPath: string | null;
+  readonly metadataFetchedAt: string | null;
+};
+
+/** Folds the flat metadata columns into `Media.metadata` (null until UC2 looked the row up). */
+function toMedia(row: MediaRow, mediaStreams: readonly StreamInfo[]): Media {
+  const { metadataFetchedAt, genres, cast, ...rest } = row;
+  const {
+    tmdbId,
+    overview,
+    releaseDate,
+    runtimeMin,
+    voteAverage,
+    voteCount,
+    posterPath,
+    backdropPath,
+    ...base
+  } = rest;
+  const metadata: MediaMetadata | null =
+    metadataFetchedAt === null
+      ? null
+      : {
+          tmdbId,
+          overview,
+          genres: genres ?? [],
+          releaseDate,
+          runtimeMin,
+          voteAverage,
+          voteCount,
+          cast: cast ?? [],
+          posterPath,
+          backdropPath,
+          fetchedAt: metadataFetchedAt,
+        };
+  return { ...base, streams: mediaStreams, metadata };
 }

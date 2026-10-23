@@ -1,0 +1,13 @@
+fake TMDB on 127.0.0.1:3199
+1 GET /3/search/movie?query=Home+Video&include_adult=false&language=en-US auth=bearer
+2 GET /3/search/movie?query=Home+Video&include_adult=false&language=en-US auth=bearer
+3 GET /3/search/movie?query=The+Matrix&include_adult=false&year=1999&language=en-US auth=bearer
+4 GET /3/movie/603?append_to_response=credits&language=en-US auth=bearer
+5 GET /3/configuration?language=en-US auth=bearer
+6 GET /t/p/w500/matrixposter.png auth=none
+7 GET /t/p/w1280/matrixbackdrop.png auth=none
+8 GET /3/search/movie?query=Home+Video&include_adult=false&language=en-US auth=bearer
+9 GET /3/search/movie?query=The+Matrix&include_adult=false&year=1999&language=en-US auth=bearer
+10 GET /3/movie/603?append_to_response=credits&language=en-US auth=bearer
+
+[exited with code 144]

@@ -19,7 +19,14 @@ describe('library routes', () => {
     root = join(mediaRoot, 'films');
     await mkdir(root);
     probe = vi.fn<Prober>(async () => ({ durationSec: 60, streams: [] }));
-    app = buildApp({ version: 'test', db: openDatabase(':memory:'), probe, mediaRoot });
+    app = buildApp({
+      version: 'test',
+      db: openDatabase(':memory:'),
+      probe,
+      mediaRoot,
+      tmdb: null,
+      artworkDir: join(mediaRoot, 'artwork'),
+    });
   });
 
   afterEach(async () => {
@@ -87,7 +94,7 @@ describe('library routes', () => {
     const media = await app.inject({ method: 'GET', url: `/libraries/${library.id}/media` });
 
     expect(scan.statusCode).toBe(200);
-    expect(scan.json()).toEqual({ added: 1, updated: 0, removed: 0, skipped: [] });
+    expect(scan.json()).toEqual({ added: 1, updated: 0, removed: 0, skipped: [], metadata: null });
     expect(media.json()).toEqual([
       expect.objectContaining({
         title: 'Heat',

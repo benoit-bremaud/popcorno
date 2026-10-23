@@ -64,11 +64,16 @@ The owner calls `POST /libraries/:id/scan`.
 6. System parses the relative path into a `ParsedName` (film: title + year; episode:
    series title, season, number) with the pure name parser (ADR-0002).
 7. System upserts the `Media` row keyed by `(libraryId, filePath)` and replaces its
-   `StreamInfo` rows; an episode is attached to a `series` `Media` (title + year)
-   created on demand.
+   `StreamInfo` rows; an episode is attached to a `series` `Media` found by parsed title
+   + year (`parsedTitle`, written by the scan only, so a series renamed by UC2 keeps
+   collecting its episodes) and created on demand; a provider tag parsed from the new
+   episode that differs from the series row's replaces it and queues the series for UC2.
 8. After the walk, System deletes the `Media` rows of this library whose real path was
    not seen, then the `series` rows no episode points to.
-9. System returns `200` with the scan report.
+9. «include» UC2 ([tmdb-metadata.md](tmdb-metadata.md)) on the rows left without
+   metadata, when `TMDB_API_KEY` is configured; its report becomes `metadata` in the
+   scan report (`null` when not configured). A TMDB failure never fails the scan.
+10. System returns `200` with the scan report.
 
 ## Extensions
 
@@ -109,7 +114,10 @@ The owner calls `POST /libraries/:id/scan`.
   probing and parsing are skipped, the row counts as neither added nor updated. A renamed
   link to the same file changes the relative path, so its title / year are re-parsed.
   Continue at 3.
-- **\*a. A scan of the same library is already running** → `409 { error: 'scan_running' }`.
+- **\*a. A scan or an enrichment (UC2) of the same library is already running** →
+  `409 { error: 'scan_running' }`. One lock per library covers the walk *and* its
+  included enrichment, so an enrichment in flight can never save a match for a file this
+  scan has just re-parsed.
 
 ## Technology and data variations
 

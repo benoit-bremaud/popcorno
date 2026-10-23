@@ -23,6 +23,7 @@ classDiagram
     +string libraryId
     +MediaKind kind
     +string title
+    +string parsedTitle
     +int year
     +string relativePath
     +int durationSec
@@ -30,6 +31,30 @@ classDiagram
     +string edition
     +int part
     +StreamInfo[] streams
+    +MediaMetadata metadata
+  }
+  class MediaMetadata {
+    +int tmdbId
+    +string overview
+    +Genre[] genres
+    +string releaseDate
+    +int runtimeMin
+    +float voteAverage
+    +int voteCount
+    +CastMember[] cast
+    +string posterPath
+    +string backdropPath
+    +Date fetchedAt
+    +isDocumentary() bool
+  }
+  class Genre {
+    +int id
+    +string name
+  }
+  class CastMember {
+    +string name
+    +string character
+    +string profilePath
   }
   class Episode {
     +int season
@@ -67,6 +92,9 @@ classDiagram
   Media <|-- Episode
   Media "1" *-- "*" StreamInfo
   Media "1" *-- "1" ProviderIds
+  Media "1" *-- "0..1" MediaMetadata
+  MediaMetadata "1" *-- "*" Genre
+  MediaMetadata "1" *-- "*" CastMember
   Profile "1" o-- "*" WatchProgress
   Media "1" o-- "*" WatchProgress
   PlaybackDecider ..> StreamInfo
@@ -80,5 +108,11 @@ classDiagram
   mtime live only in the `media` table (playback and re-scan fingerprint).
 - `providerIds`, `edition` and `part` come from the Plex / Jellyfin file-name tags
   (spec UC1); `providerIds` is the hand-off to TMDB (UC2).
+- `MediaMetadata` (UC2, ADR-0003) is null until TMDB was asked; `fetchedAt` set with
+  `tmdbId` null means "looked up, unmatched". `posterPath` / `backdropPath` are cached
+  file names under `data/artwork` (served by `GET /artwork/:file`), never TMDB URLs; for
+  an episode `posterPath` holds the still. `isDocumentary()` = genre id 99 present: the
+  catalog's "documentaries" row is derived, `kind` stays structural. Persisted as columns
+  on `media` with `genres` / `cast` as JSON.
 - `WatchProgress.isFinished()` = position ≥ 90 % of duration; drives "next episode".
 - `PlaybackDecider` has no state; it is a function in a class box for UML readability.

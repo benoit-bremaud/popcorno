@@ -13,6 +13,8 @@ describe('buildApp', () => {
       db: openDatabase(':memory:'),
       probe: async () => ({ durationSec: null, streams: [] }),
       mediaRoot: tmpdir(),
+      tmdb: null,
+      artworkDir: tmpdir(),
     });
   });
 

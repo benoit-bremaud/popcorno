@@ -55,4 +55,5 @@ flowchart LR
 - UC6 and UC7 «extend» UC5 at the "playback ends / is reopened" extension points; kept as
   separate ovals for readability.
 - UC2 is actor-initiated (the owner asks for a refresh); the scan's automatic metadata
-  fetch is an «include» of UC1, not a use case of its own.
+  fetch is an «include» of UC1, not a use case of its own. Textual specs:
+  [UC1](../../specs/library-scan.md), [UC2](../../specs/tmdb-metadata.md).

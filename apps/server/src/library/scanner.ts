@@ -7,6 +7,9 @@ import { isExtra, parseMediaName } from './name-parser.js';
 import { resolveUnderRoot } from './path-guard.js';
 import type { LibraryRepository } from './repository.js';
 
+/** What the walk produces; the scan route adds the `metadata` section (UC1's «include» of UC2). */
+export type ScanOutcome = Omit<ScanReport, 'metadata'>;
+
 /** Video containers the walk keeps (spec § Technology and data variations); lower-case, with the dot. */
 export const SUPPORTED_EXTENSIONS: ReadonlySet<string> = new Set([
   '.mkv',
@@ -25,14 +28,6 @@ export class RootUnreadableError extends Error {
   }
 }
 
-/** Thrown when a scan of the same library is already in flight (spec extension *a). */
-export class ScanRunningError extends Error {
-  constructor(libraryId: string) {
-    super(`A scan of library ${libraryId} is already running`);
-    this.name = 'ScanRunningError';
-  }
-}
-
 /** A file found under the root: its real path (the guard's result) and fingerprint. */
 interface LocatedFile {
   readonly realPath: string;
@@ -44,8 +39,6 @@ type StoreOutcome = 'added' | 'updated' | 'unchanged' | 'probe_failed';
 
 /** Walks the library root and persists what it finds (sequence diagram 02-scan-library). */
 export class LibraryScanner {
-  private readonly running = new Set<string>();
-
   /** `mediaRoot`: the folder every library root must resolve under, symlinks followed. */
   constructor(
     private readonly repository: LibraryRepository,
@@ -54,22 +47,12 @@ export class LibraryScanner {
   ) {}
 
   /**
-   * Runs UC1 on one library and returns its report.
+   * Runs UC1 on one library and returns its report. Not guarded against a concurrent run:
+   * the scan route holds the `LibraryLock` (spec *a), so the scanner stays a pure walk.
    * @throws {RootUnreadableError} when the root is missing, not a directory, or a link
    *   whose target escapes the media root (spec 2b).
-   * @throws {ScanRunningError} when a scan of the same library is in flight (spec *a).
    */
-  async scan(library: Library): Promise<ScanReport> {
-    if (this.running.has(library.id)) throw new ScanRunningError(library.id);
-    this.running.add(library.id);
-    try {
-      return await this.run(library);
-    } finally {
-      this.running.delete(library.id);
-    }
-  }
-
-  private async run(library: Library): Promise<ScanReport> {
+  async scan(library: Library): Promise<ScanOutcome> {
     const root = await realRoot(library.rootPath, this.mediaRoot);
     const { files, unreadableDirs } = await walk(root);
     const skipped: SkippedFile[] = unreadableDirs.map((dir) => ({

@@ -4,8 +4,14 @@ import type { ApiError, HealthResponse } from '@popcorno/shared';
 import type { AppDatabase } from './db/index.js';
 import type { Prober } from './library/ffprobe.js';
 import { LibraryRepository } from './library/repository.js';
+import { LibraryLock } from './library/lock.js';
 import { registerLibraryRoutes } from './library/routes.js';
 import { LibraryScanner } from './library/scanner.js';
+import { ArtworkCache } from './metadata/artwork-cache.js';
+import { MetadataRepository } from './metadata/repository.js';
+import { registerMetadataRoutes } from './metadata/routes.js';
+import { MetadataService } from './metadata/service.js';
+import type { TmdbClient } from './metadata/tmdb-client.js';
 
 /** Everything `buildApp` needs; `index.ts` fills it from the config, tests from fakes. */
 export interface AppOptions {
@@ -15,6 +21,10 @@ export interface AppOptions {
   readonly probe: Prober;
   /** Absolute folder library roots must live under (`ServerConfig.mediaRoot`). */
   readonly mediaRoot: string;
+  /** HTTP boundary to TMDB; null when no key is configured (UC2 disabled). */
+  readonly tmdb: TmdbClient | null;
+  /** Folder the artwork cache writes to and `GET /artwork/:file` serves from. */
+  readonly artworkDir: string;
   readonly logger?: boolean;
 }
 
@@ -36,8 +46,29 @@ export function buildApp(options: AppOptions): FastifyInstance {
   }));
 
   const repository = new LibraryRepository(options.db);
+  const lock = new LibraryLock();
   const scanner = new LibraryScanner(repository, options.probe, options.mediaRoot);
-  registerLibraryRoutes(app, { repository, scanner, mediaRoot: options.mediaRoot });
+  const metadata = options.tmdb
+    ? new MetadataService({
+        repository: new MetadataRepository(options.db),
+        client: options.tmdb,
+        artwork: new ArtworkCache(options.artworkDir, options.tmdb),
+        logger: app.log,
+      })
+    : null;
+  registerLibraryRoutes(app, {
+    repository,
+    scanner,
+    lock,
+    mediaRoot: options.mediaRoot,
+    enrich: metadata ? (library) => metadata.enrich(library) : null,
+  });
+  registerMetadataRoutes(app, {
+    repository,
+    service: metadata,
+    lock,
+    artworkDir: options.artworkDir,
+  });
 
   return app;
 }

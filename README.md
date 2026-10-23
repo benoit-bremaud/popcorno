@@ -43,9 +43,31 @@ Quality commands: `pnpm typecheck` · `pnpm lint` · `pnpm format:check` · `pnp
 ```bash
 curl -X POST localhost:3000/libraries -H 'content-type: application/json' \
   -d '{"name":"Films","rootPath":"/absolute/path/under/MEDIA_ROOT/films","kind":"films"}'
-curl -X POST localhost:3000/libraries/<id>/scan     # {added, updated, removed, skipped[]}
-curl localhost:3000/libraries/<id>/media            # films / episodes with their streams
+curl -X POST localhost:3000/libraries/<id>/scan     # {added, updated, removed, skipped[], metadata}
+curl localhost:3000/libraries/<id>/media            # films / episodes with streams + metadata
 ```
+
+### Metadata from TMDB
+
+Set `TMDB_API_KEY` to your free **API Read Access Token** (the long `eyJ…` token from
+<https://www.themoviedb.org/settings/api>; the short v3 key is not accepted) and every scan
+enriches the new titles: official
+title, synopsis, genres, release date, runtime, rating, top cast, poster and backdrop. The
+images are cached under `ARTWORK_DIR` (default `data/artwork`) and served by
+`GET /artwork/<file>`, so the browser never contacts TMDB. Only a title, a year or the
+`[tmdbid-…]` / `[imdbid-…]` tag of a file name is ever sent. `TMDB_LANGUAGE` (default
+`en-US`) picks the language of titles and synopses.
+
+```bash
+curl -X POST localhost:3000/libraries/<id>/enrich   # titles not looked up yet
+curl -X POST localhost:3000/libraries/<id>/enrich -H 'content-type: application/json' \
+  -d '{"refresh":true}'                             # re-fetch every title
+```
+
+Without a key the server starts anyway (`metadata: null` in the scan report — also null
+when the post-scan enrichment could not run, see the log — and `409 tmdb_not_configured`
+on `/enrich`). Design: [UC2 spec](docs/architecture/specs/tmdb-metadata.md),
+[ADR-0003](docs/architecture/decisions/0003-tmdb-metadata.md).
 
 `ffprobe` (FFmpeg) must be installed. A library root must be `MEDIA_ROOT` or a folder under
 it (default `./media`), and the server listens on `127.0.0.1` unless `HOST` says otherwise:

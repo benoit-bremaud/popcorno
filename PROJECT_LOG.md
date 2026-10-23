@@ -4,7 +4,38 @@ Chronological operational logbook (newest first). Complements `git log` with the
 context: merged PRs, decisions, tags, infra events. Not a release changelog — that is
 `CHANGELOG.md`.
 
-## 2026-10-22 — #3 Library scan (PR pending)
+## 2026-10-23 — #4 TMDB metadata (PR pending)
+
+- **Conception gate** — Cockburn spec UC2 (`docs/architecture/specs/tmdb-metadata.md`),
+  sequence diagram `02-sequence-enrich-metadata.md`, class / component / data-flow updates,
+  ADR-0003 with five MCDA matrices (TMDB v3 verified through Context7): plain `fetch`
+  client (A 450/500), id-first then title + year with a ±1 retry (A 460), scalar columns +
+  JSON `genres` / `cast` on `media` with documentary derived from genre 99 (A 470), poster
+  `w500` + backdrop `w1280` cached by digest under `ARTWORK_DIR` and served by
+  `GET /artwork/:file` (A 455), scan chains the enrichment + `POST /libraries/:id/enrich
+  { refresh }` with sequential requests and one 429 retry (A 480). Owner validated the five
+  A options as proposed (`0a83afb`).
+- **Implementation** (`fabd3bc`) — `src/metadata/`: zod-validated TMDB client (single HTTP
+  egress, injected `fetch`), pure matcher / mapper, artwork cache (write-then-rename,
+  digest names), repository, service, routes; migration `0001_tmdb-metadata` (nullable
+  columns only); `ScanReport.metadata`; shared contracts; README / `.env.example` /
+  CHANGELOG / CLAUDE.md. 135 tests.
+- **Local review (`review-local` on fabd3bc)** — five dimensions reconciled in
+  `docs/architecture/review-local.md`: 7 Must (2 SonarQube smells, 5 stale doc claims),
+  20 Should, 11 Nice. All Must + Should applied: image downloads capped at 10 MB, base URL
+  pinned to `https://image.tmdb.org` with no redirect, bounded provider strings, a
+  rescanned changed file is looked up again, a series with a newly added episode is
+  pending again, absent episodes keep their fields (`markLookedUp`), failures logged
+  through an injected logger, deterministic concurrency tests, `sequentially()` helper
+  (SonarQube S9382 forbids `await` in a loop, the global TS rule forbids `.then()`
+  chains). Tests 135 → 146, coverage 98.3 % stmts / 93.5 % branches, doc coverage 100 %,
+  SonarQube PASSED, gitleaks clean. QA with a **mocked TMDB** (no key available):
+  `docs/architecture/qa/2026-10-23-issue-4-tmdb-metadata/`. Nice items filed as issue #15.
+
+## 2026-10-22 → 2026-10-23 — #3 Library scan (PR #14 merged)
+
+- **Merged** — PR #14 squash-merged into `main` on 2026-10-23 as `1763c9c`, closing #3.
+  The Nice-to-have findings of the local review are tracked in issue #13.
 
 - **Conception gate** — textual Cockburn spec UC1 (`docs/architecture/specs/library-scan.md`),
   sequence diagram `02-sequence-scan-library.md`, ADR-0002 file-naming parser: own regex

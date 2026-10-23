@@ -1,0 +1,197 @@
+## POST /libraries
+{
+    "id": "f62ae198-c5a7-43d8-baec-36895889f38f",
+    "name": "Films",
+    "rootPath": "$S/media/films",
+    "kind": "films"
+}
+## POST /libraries/:id/scan (include UC2; fake answers 429 once first)
+{
+    "added": 2,
+    "updated": 0,
+    "removed": 0,
+    "skipped": [],
+    "metadata": {
+        "matched": 1,
+        "unmatched": [
+            {
+                "title": "Home Video",
+                "year": null
+            }
+        ],
+        "failed": [],
+        "skipped": 0
+    }
+}
+## GET /libraries/:id/media
+[
+    {
+        "id": "eb5bd65d-2666-4db5-a9e0-b30ecbeb55d7",
+        "libraryId": "f62ae198-c5a7-43d8-baec-36895889f38f",
+        "kind": "film",
+        "title": "Home Video",
+        "year": null,
+        "relativePath": "Home Video.mkv",
+        "durationSec": 1,
+        "season": null,
+        "episode": null,
+        "episodeEnd": null,
+        "seriesId": null,
+        "providerIds": {},
+        "edition": null,
+        "part": null,
+        "streams": [
+            {
+                "type": "video",
+                "codec": "h264",
+                "width": 64,
+                "height": 64,
+                "language": null
+            },
+            {
+                "type": "audio",
+                "codec": "aac",
+                "width": null,
+                "height": null,
+                "language": null
+            }
+        ],
+        "metadata": {
+            "tmdbId": null,
+            "overview": null,
+            "genres": [],
+            "releaseDate": null,
+            "runtimeMin": null,
+            "voteAverage": null,
+            "voteCount": null,
+            "cast": [],
+            "posterPath": null,
+            "backdropPath": null,
+            "fetchedAt": "2026-10-23T08:45:38.012Z"
+        }
+    },
+    {
+        "id": "22ac78ad-aa65-4db8-a193-9d9215bf527b",
+        "libraryId": "f62ae198-c5a7-43d8-baec-36895889f38f",
+        "kind": "film",
+        "title": "The Matrix",
+        "year": 1999,
+        "relativePath": "The Matrix (1999).mkv",
+        "durationSec": 1,
+        "season": null,
+        "episode": null,
+        "episodeEnd": null,
+        "seriesId": null,
+        "providerIds": {},
+        "edition": null,
+        "part": null,
+        "streams": [
+            {
+                "type": "video",
+                "codec": "h264",
+                "width": 64,
+                "height": 64,
+                "language": null
+            },
+            {
+                "type": "audio",
+                "codec": "aac",
+                "width": null,
+                "height": null,
+                "language": null
+            }
+        ],
+        "metadata": {
+            "tmdbId": 603,
+            "overview": "A computer hacker learns about the true nature of reality.",
+            "genres": [
+                {
+                    "id": 28,
+                    "name": "Action"
+                },
+                {
+                    "id": 878,
+                    "name": "Science Fiction"
+                }
+            ],
+            "releaseDate": "1999-03-30",
+            "runtimeMin": 136,
+            "voteAverage": 8.2,
+            "voteCount": 25000,
+            "cast": [
+                {
+                    "name": "Keanu Reeves",
+                    "character": "Neo",
+                    "profilePath": null
+                }
+            ],
+            "posterPath": "a1b8fe1e07fe1c70efed6a13209bd0b2abb112d8db9537ab26895fe1b2a8a310.png",
+            "backdropPath": "28500e9543bd0d37de3b398dbab6bf2dcfae61f56c1f279089e48206c53a49d8.png",
+            "fetchedAt": "2026-10-23T08:45:38.025Z"
+        }
+    }
+]
+## GET /artwork/a1b8fe1e07fe1c70efed6a13209bd0b2abb112d8db9537ab26895fe1b2a8a310.png
+HTTP/1.1 200 OK
+content-type: image/png
+content-length: 70
+cache-control: public, max-age=31536000, immutable
+Date: Fri, 23 Oct 2026 08:45:38 GMT
+Connection: keep-alive
+Keep-Alive: timeout=72
+
+$S/poster.png: PNG image data, 1 x 1, 8-bit/color RGBA, non-interlaced
+## GET /artwork traversal + missing
+{"error":"invalid_request","details":[{"path":["file"],"message":"Invalid string: must match pattern /^[a-f0-9]{64}\\.(?:jpg|png)$/"}]} → 400
+{"error":"artwork_not_found"} → 404
+## POST /enrich (plain)
+{"matched":0,"unmatched":[],"failed":[],"skipped":2}
+## POST /enrich {refresh:true}
+{"matched":1,"unmatched":[{"title":"Home Video","year":null}],"failed":[],"skipped":0}
+## POST /enrich bad body
+## POST /enrich bad body
+{"error":"invalid_request","details":[{"path":["refresh"],"message":"Invalid input: expected boolean, received string"}]} → 400
+## POST /enrich unknown library
+{"error":"library_not_found"} → 404
+## POST /enrich (plain, after restart: nothing pending)
+{"matched":0,"unmatched":[],"failed":[],"skipped":2}
+## artwork folder
+28500e9543bd0d37de3b398dbab6bf2dcfae61f56c1f279089e48206c53a49d8.png
+a1b8fe1e07fe1c70efed6a13209bd0b2abb112d8db9537ab26895fe1b2a8a310.png
+## fake TMDB log
+fake TMDB on 127.0.0.1:3199
+1 GET /3/configuration auth=none
+2 GET /3/search/movie?query=Home+Video&include_adult=false&language=en-US auth=bearer
+3 GET /3/search/movie?query=The+Matrix&include_adult=false&year=1999&language=en-US auth=bearer
+4 GET /3/movie/603?append_to_response=credits&language=en-US auth=bearer
+5 GET /3/configuration?language=en-US auth=bearer
+6 GET /t/p/w500/matrixposter.png auth=none
+7 GET /t/p/w1280/matrixbackdrop.png auth=none
+8 GET /3/search/movie?query=Home+Video&include_adult=false&language=en-US auth=bearer
+9 GET /3/search/movie?query=The+Matrix&include_adult=false&year=1999&language=en-US auth=bearer
+10 GET /3/movie/603?append_to_response=credits&language=en-US auth=bearer
+node:events:497
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use 127.0.0.1:3199
+    at Server.setupListenHandle [as _listen2] (node:net:1941:16)
+    at listenInCluster (node:net:1998:12)
+    at node:net:2207:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1977:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '127.0.0.1',
+  port: 3199
+}
+
+Node.js v22.23.3
+## server log — warn/error lines
+(none)
+## server log — key never logged
+$S/fake-tmdb.log:0
+$S/server.log:0
