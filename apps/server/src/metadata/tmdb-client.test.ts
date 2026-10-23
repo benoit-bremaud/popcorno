@@ -303,6 +303,48 @@ describe('createTmdbClient', () => {
     await expect(client.image('/a.jpg', 'w500')).rejects.toMatchObject({ status: 413 });
   });
 
+  it('stops reading an unannounced image stream as soon as it passes the cap', async () => {
+    const chunk = new Uint8Array(1024 * 1024);
+    let pulled = 0;
+    let cancelled = false;
+    // An endless body with no Content-Length: only a streaming cap can stop it.
+    const endless = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled += 1;
+        controller.enqueue(chunk);
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const fetch = makeFetch({
+      '/configuration': () =>
+        jsonResponse({ images: { secure_base_url: 'https://image.tmdb.org/t/p/' } }),
+      'image.tmdb.org': () => new Response(endless),
+    });
+
+    await expect(makeClient(fetch).image('/a.jpg', 'w500')).rejects.toMatchObject({ status: 413 });
+    expect(cancelled).toBe(true);
+    expect(pulled).toBeLessThan(IMAGE_MAX_BYTES / chunk.byteLength + 3);
+  });
+
+  it('reassembles a chunked image under the cap byte for byte', async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array([1, 2]));
+        controller.enqueue(new Uint8Array([3]));
+        controller.close();
+      },
+    });
+    const fetch = makeFetch({
+      '/configuration': () =>
+        jsonResponse({ images: { secure_base_url: 'https://image.tmdb.org/t/p/' } }),
+      'image.tmdb.org': () => new Response(body),
+    });
+
+    expect([...(await makeClient(fetch).image('/a.jpg', 'w500'))]).toEqual([1, 2, 3]);
+  });
+
   it('rejects a payload whose strings exceed the bounds as an invalid shape', async () => {
     const fetch = makeFetch({
       '/movie/1': () => jsonResponse({ id: 1, title: 'x', overview: 'o'.repeat(10_001) }),

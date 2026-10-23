@@ -502,6 +502,25 @@ describe('MetadataService', () => {
     expect(afterwards).toEqual({ matched: 0, unmatched: [], failed: [], skipped: 1 });
   });
 
+  it('downloads the poster and the backdrop of a title one after the other', async () => {
+    addFilm('Interstellar', 2014);
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const image = vi.fn<TmdbClient['image']>(async () => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await Promise.resolve(); // Yield once so a concurrent download could overlap.
+      inFlight -= 1;
+      return new Uint8Array([1]);
+    });
+    const client = makeClient({ search: vi.fn(async () => [{ id: 157336, year: 2014 }]), image });
+
+    await makeService(client).enrich(library);
+
+    expect(image).toHaveBeenCalledTimes(2);
+    expect(maxInFlight).toBe(1);
+  });
+
   it('downloads the episode stills of a season one after the other', async () => {
     const series = libraries.createLibrary({ name: 'Series', rootPath: '/s', kind: 'series' });
     const seriesId = libraries.findOrCreateSeries(series.id, 'Dark', 2017, {});

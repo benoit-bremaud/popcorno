@@ -128,10 +128,9 @@ export class MetadataService {
 
   /** Replaces the TMDB artwork paths by cached file names (null when absent or failed). */
   private async withArtwork(input: MetadataInput): Promise<MetadataInput> {
-    const [posterPath, backdropPath] = await Promise.all([
-      this.cacheArtwork(input.posterPath, POSTER_SIZE),
-      this.cacheArtwork(input.backdropPath, BACKDROP_SIZE),
-    ]);
+    // One after the other, like every other TMDB request (ADR-0003 § 5).
+    const posterPath = await this.cacheArtwork(input.posterPath, POSTER_SIZE);
+    const backdropPath = await this.cacheArtwork(input.backdropPath, BACKDROP_SIZE);
     return { ...input, posterPath, backdropPath };
   }
 

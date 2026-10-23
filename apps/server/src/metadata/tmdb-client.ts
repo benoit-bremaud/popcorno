@@ -194,6 +194,36 @@ function normaliseCast(cast: readonly CastRow[]): readonly TmdbCastMember[] {
 }
 
 /**
+ * Reads a body chunk by chunk and returns its bytes, or null (stream cancelled) as soon as
+ * more than `limit` bytes arrived, so an oversized image never sits in memory whole.
+ * Recursion rather than a loop: no `await` in a loop (Sonar S9382) and no `.then()` chain.
+ */
+async function readCapped(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  limit: number,
+  chunks: Uint8Array[] = [],
+  total = 0,
+): Promise<Uint8Array | null> {
+  const { done, value } = await reader.read();
+  if (done) {
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return bytes;
+  }
+  const size = total + value.byteLength;
+  if (size > limit) {
+    await reader.cancel();
+    return null;
+  }
+  chunks.push(value);
+  return readCapped(reader, limit, chunks, size);
+}
+
+/**
  * Builds the real client over `fetch`; one instance per server, no state but the image base
  * URL (read lazily from `/configuration` on the first image download, cached for the
  * client's life, forgotten when that call fails).
@@ -327,9 +357,11 @@ export function createTmdbClient(options: TmdbClientOptions): TmdbClient {
         await response.body?.cancel();
         throw new TmdbRequestError(`/image${path}`, response.ok ? 413 : response.status);
       }
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      // The header may lie or be absent: the bytes actually read are what count.
-      if (bytes.byteLength > IMAGE_MAX_BYTES) throw new TmdbRequestError(`/image${path}`, 413);
+      // The header may lie or be absent: count the bytes as they arrive, stop past the cap.
+      const bytes = response.body
+        ? await readCapped(response.body.getReader(), IMAGE_MAX_BYTES)
+        : null;
+      if (bytes === null) throw new TmdbRequestError(`/image${path}`, 413);
       return bytes;
     },
   };
