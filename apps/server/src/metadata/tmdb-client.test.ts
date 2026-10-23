@@ -279,7 +279,9 @@ describe('createTmdbClient', () => {
 
     await makeClient(fetch).image('/a.jpg', 'w500');
 
-    const init = fetch.mock.calls.find((call) => String(call[0]).includes('image.tmdb.org'))?.[1];
+    const init = fetch.mock.calls.find(
+      (call) => new URL(String(call[0])).hostname === 'image.tmdb.org',
+    )?.[1];
     expect(init?.redirect).toBe('error');
   });
 
