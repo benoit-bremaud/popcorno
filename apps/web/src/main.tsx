@@ -1,7 +1,9 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
+import '@fontsource-variable/inter';
 import './styles/tokens.css';
+import './styles/catalog.css';
 
 const root = document.getElementById('root');
 if (root === null) {
