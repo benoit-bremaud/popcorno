@@ -2,13 +2,13 @@ import type { Dirent } from 'node:fs';
 import { readdir, realpath, stat } from 'node:fs/promises';
 import { extname, join, relative, sep } from 'node:path';
 import type { Library, ScanReport, SkipReason, SkippedFile } from '@popcorno/shared';
-
-/** What the walk produces; the scan route adds the `metadata` section (UC1's «include» of UC2). */
-export type ScanOutcome = Omit<ScanReport, 'metadata'>;
 import type { Prober } from './ffprobe.js';
 import { isExtra, parseMediaName } from './name-parser.js';
 import { resolveUnderRoot } from './path-guard.js';
 import type { LibraryRepository } from './repository.js';
+
+/** What the walk produces; the scan route adds the `metadata` section (UC1's «include» of UC2). */
+export type ScanOutcome = Omit<ScanReport, 'metadata'>;
 
 /** Video containers the walk keeps (spec § Technology and data variations); lower-case, with the dot. */
 export const SUPPORTED_EXTENSIONS: ReadonlySet<string> = new Set([

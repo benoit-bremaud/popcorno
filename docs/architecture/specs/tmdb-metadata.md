@@ -32,7 +32,8 @@ Owner.
 
 - A library exists with scanned `media` rows (UC1).
 - `TMDB_API_KEY` is set; otherwise UC2 answers `409 tmdb_not_configured` and UC1 skips
-  its include (`metadata: null` in the scan report).
+  its include (`metadata: null` in the scan report — also null when the include itself
+  could not run, e.g. a run was already in flight; the cause is logged).
 
 ## Minimal guarantees
 
@@ -45,7 +46,8 @@ Owner.
 
 ## Success guarantees
 
-- Every row that was pending has `metadataFetchedAt` set; matched rows carry `tmdbId`,
+- Every row that was pending, except those reported `failed`, has `metadataFetchedAt`
+  set; matched rows carry `tmdbId`,
   `overview`, `genres`, `releaseDate`, `runtimeMin`, `voteAverage`, `voteCount`,
   `cast` (top 10), `posterPath` and `backdropPath` pointing at cached files; the stored
   `title` is replaced by TMDB's title for the configured language.
@@ -61,10 +63,12 @@ reaches the end of its walk with the key configured.
 
 1. Owner calls `POST /libraries/:id/enrich`.
 2. System loads the library and lists its **pending** rows: films, series and `unknown`
-   rows with `metadataFetchedAt` null (all rows when `refresh` is true). Episodes are
-   handled through their series (step 8).
+   rows with `metadataFetchedAt` null, plus series with an episode row still null (added
+   by a later scan); all rows when `refresh` is true. A file UC1 found changed (size,
+   mtime) has its `metadataFetchedAt` reset, so it is pending again. Episodes are handled
+   through their series (step 8).
 3. For each pending title, one after the other:
-4. System resolves a candidate: with `providerIds.tmdb`, the id itself; with
+4. System resolves a candidate: with `providerIds.tmdb` (a whole number), the id itself; with
    `providerIds.imdb`, `GET /find/{imdb}?external_source=imdb_id`; otherwise
    `GET /search/movie?query=<title>&year=<year>` for a film library,
    `GET /search/tv?query=<title>&first_air_date_year=<year>` for a series library. The
@@ -77,13 +81,15 @@ reaches the end of its walk with the key configured.
    `episode_run_time`), vote average and count, poster and backdrop TMDB paths, the ten
    first cast members by `order` (`name`, `character`, `profilePath`).
 7. System caches the poster (`w500`) and the backdrop (`w1280`): the TMDB path is
-   validated, the image downloaded once into `data/artwork/<sha256(path)>.<ext>` (an
-   existing file is reused), and the file name is what gets stored.
+   validated, the image downloaded once (no redirect followed, at most 10 MB) into
+   `data/artwork/<sha256(size + path)>.<ext>` (an existing file is reused), and the file
+   name is what gets stored.
 8. For a series, System groups the library's episodes of that series by season, calls
    `GET /tv/{id}/season/{n}` once per season, and stores on each episode row the matching
    `episode_number`'s name, overview, still (cached like a poster, in `posterPath`), air
    date and rating; a multi-episode file (`episodeEnd`) takes the first episode's data.
-9. System saves the row (`metadataFetchedAt` = now) and counts it `matched`.
+9. System saves the row (`metadataFetchedAt` = now, `title` replaced by TMDB's) and
+   counts it `matched`.
 10. After the last title, System returns `200` with the report.
 
 ## Extensions
@@ -99,28 +105,39 @@ reaches the end of its walk with the key configured.
   a `refresh`. Continue at 3.
 - **4b. The provider id is unknown to TMDB** (404) → same as 4a (`unmatched`); the owner
   fixes the tag in the file name and re-scans (UC1 re-parses a renamed file).
-- **4c–8c. TMDB answers 429** → wait `Retry-After` seconds (capped at 10), retry once;
-  a second 429 counts as a failure (5a).
-- **5a. Any request fails** (network, 5xx, timeout, payload fails validation) → the title
-  is reported `failed`, nothing is written for it (a later run retries it, since
-  `metadataFetchedAt` stays null). Continue at 3.
-- **7a. Artwork download fails** → the row is saved without that path (`null`); the
-  title still counts as `matched`, the next run with `refresh` fetches it again.
+- **4c–8c. TMDB answers 429** on an API request → wait `Retry-After` seconds (default 1,
+  capped at 10 so a run never stalls on a provider hint), retry once; a second 429 counts
+  as a failure (5a). Image downloads are not retried (7a).
+- **5a. Any request fails** (network, 15 s timeout, 5xx, payload fails validation) → the
+  title is reported `failed` and the cause logged, nothing is written for it (a later run
+  retries it, since `metadataFetchedAt` stays null). Continue at 3.
+- **7a. Artwork download fails** (error status, oversize, redirect, base URL not
+  `https://image.tmdb.org`) → the row is saved without that path (`null`), the cause
+  logged; the title still counts as `matched`, the next run with `refresh` fetches it again.
 - **7b. TMDB has no poster / backdrop** (`null` path) → nothing downloaded, path `null`.
-- **8a. A season is missing on TMDB** (404) → its episodes stay as parsed (title from
-  the file name), the series itself is `matched`.
+- **8a. Any failure fetching a season** (404, network, invalid payload) → its episodes
+  stay as parsed (title from the file name), the cause is logged, the series itself is
+  `matched`.
 - **8b. An episode number is absent from the season payload** → that row keeps its
-  parsed fields, `metadataFetchedAt` is set so the catalog can tell it was looked up.
+  fields (parsed, or from an earlier run), only `metadataFetchedAt` is set so the catalog
+  can tell it was looked up.
 - **\*a. Included in UC1** — the scan route runs steps 2–10 after the walk with
-  `refresh` false; its report gains `metadata: EnrichReport | null` (null when 2a).
+  `refresh` false; its report gains `metadata: EnrichReport | null` (null when 2a, or
+  when the include threw — 2b — which is logged, never fails the scan).
 
 ## Technology and data variations
 
 - Authentication: `Authorization: Bearer <TMDB_API_KEY>` (works for a v3 key or a v4
   read token); `language=<TMDB_LANGUAGE>` on every request (default `en-US`).
-- Image base URL read once per run from `GET /configuration` (`images.secure_base_url`);
-  sizes are constants (`w500` poster / still, `w1280` backdrop) validated against the
-  reference on 2026-10-23.
+- Image base URL read lazily from `GET /configuration` (`images.secure_base_url`) on the
+  first image download of the client's life, then cached (forgotten when that call
+  fails); it must be `https://image.tmdb.org/…`, anything else is refused. Sizes are
+  constants (`w500` poster / still, `w1280` backdrop) validated against the reference on
+  2026-10-23. Every request times out after 15 s.
+- `POST /libraries/:id/enrich` is synchronous: the response comes after the last title
+  (a few minutes for a 500-title first run); a run in flight answers `409` meanwhile.
+- `GET /artwork/:file` answers `Cache-Control: public, max-age=31536000, immutable`: a
+  digest-named file never changes content, so the browser may keep it for a year.
 - `unknown` rows (UC1 extension 6a) are searched as films in a films library and as
   series in a series library, with no year: this is the recovery path ADR-0002 promised.
 - Documentaries: genre id 99 (`Documentary`, both movie and TV lists). The catalog
@@ -142,6 +159,7 @@ reaches the end of its walk with the key configured.
 - `GET /artwork/:file` serves a cached poster with the right content type and rejects any
   other name with `400`; a missing file is `404`.
 - Unit tests: matcher and mapper (pure fixtures), client against an injected fake
-  `fetch` (URL, headers, 429 retry, key never in errors), artwork cache on a temporary
+  `fetch` (URL, headers, 429 retry, key never in errors, base URL pinned, size cap),
+  artwork cache on a temporary
   folder, service on an in-memory SQLite with a fake client, routes via `inject`.
 - Coverage ≥ 80 % (threshold in `vitest.config.ts`), no network in tests.

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createTmdbClient, TmdbRequestError } from './tmdb-client.js';
+import { createTmdbClient, IMAGE_MAX_BYTES, TmdbRequestError } from './tmdb-client.js';
 
 type FetchFn = typeof globalThis.fetch;
 
@@ -255,6 +255,58 @@ describe('createTmdbClient', () => {
       status: 200,
       path: '/movie/1',
     });
+  });
+
+  it('refuses an image base URL that is not https on image.tmdb.org', async () => {
+    const fetch = makeFetch({
+      '/configuration': () =>
+        jsonResponse({ images: { secure_base_url: 'https://evil.example/t/p/' } }),
+    });
+
+    await expect(makeClient(fetch).image('/a.jpg', 'w500')).rejects.toMatchObject({
+      path: '/configuration',
+      status: 400,
+    });
+    expect(fetch.mock.calls.some((call) => String(call[0]).includes('evil'))).toBe(false);
+  });
+
+  it('fetches images without following redirects', async () => {
+    const fetch = makeFetch({
+      '/configuration': () =>
+        jsonResponse({ images: { secure_base_url: 'https://image.tmdb.org/t/p/' } }),
+      'image.tmdb.org': () => new Response(new Uint8Array([1])),
+    });
+
+    await makeClient(fetch).image('/a.jpg', 'w500');
+
+    const init = fetch.mock.calls.find((call) => String(call[0]).includes('image.tmdb.org'))?.[1];
+    expect(init?.redirect).toBe('error');
+  });
+
+  it('refuses an image larger than IMAGE_MAX_BYTES, announced or actual', async () => {
+    const big = new Uint8Array(IMAGE_MAX_BYTES + 1);
+    let announced = true;
+    const fetch = makeFetch({
+      '/configuration': () =>
+        jsonResponse({ images: { secure_base_url: 'https://image.tmdb.org/t/p/' } }),
+      'image.tmdb.org': () =>
+        announced
+          ? new Response(new Uint8Array([1]), { headers: { 'content-length': String(big.length) } })
+          : new Response(big),
+    });
+    const client = makeClient(fetch);
+
+    await expect(client.image('/a.jpg', 'w500')).rejects.toMatchObject({ status: 413 });
+    announced = false;
+    await expect(client.image('/a.jpg', 'w500')).rejects.toMatchObject({ status: 413 });
+  });
+
+  it('rejects a payload whose strings exceed the bounds as an invalid shape', async () => {
+    const fetch = makeFetch({
+      '/movie/1': () => jsonResponse({ id: 1, title: 'x', overview: 'o'.repeat(10_001) }),
+    });
+
+    await expect(makeClient(fetch).details('movie', 1)).rejects.toMatchObject({ status: 200 });
   });
 
   it('reports a failed image download with its status', async () => {

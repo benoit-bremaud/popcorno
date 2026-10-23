@@ -28,9 +28,10 @@ flowchart LR
 
 - TMDB only ever receives a title and a year (or the provider id read from the file
   name) plus the owner's API key in the `Authorization` header, never who is watching.
-  The key is never logged nor echoed in an error (ADR-0003).
+  The key is never logged nor echoed in an error (ADR-0003). Image downloads go to
+  `image.tmdb.org` only (the announced base URL is pinned to that host, no redirect).
 - Watch history stays in the local SQLite file; no telemetry, no cloud sync.
-- Artwork is cached on disk under `data/artwork` (file name = SHA-256 of the TMDB path)
+- Artwork is cached on disk under `data/artwork` (file name = SHA-256 of `size + path`)
   and served by the server (`GET /artwork/:file`): the web player never contacts
   TMDB, so no viewer IP leaves the home network. Cast photos are not cached in the MVP
   and therefore not shown (follow-up).

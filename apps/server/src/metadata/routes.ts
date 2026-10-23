@@ -27,8 +27,9 @@ const CONTENT_TYPES: Readonly<Record<string, string>> = {
 
 /**
  * `POST /libraries/:id/enrich` (200 | 400 `invalid_request` | 404 `library_not_found` |
- * 409 `tmdb_not_configured` / `enrich_running`) and `GET /artwork/:file` (200 | 400 | 404
- * `artwork_not_found`).
+ * 409 `tmdb_not_configured` / `enrich_running`) — synchronous, the response comes after
+ * the last title — and `GET /artwork/:file` (200 | 400 | 404 `artwork_not_found`), served
+ * immutable for a year since a digest-named file never changes content.
  */
 export function registerMetadataRoutes(app: FastifyInstance, deps: MetadataRoutesDeps): void {
   app.post('/libraries/:id/enrich', async (request, reply) => {

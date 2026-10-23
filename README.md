@@ -63,8 +63,9 @@ curl -X POST localhost:3000/libraries/<id>/enrich -H 'content-type: application/
   -d '{"refresh":true}'                             # re-fetch every title
 ```
 
-Without a key the server starts anyway (`metadata: null` in the scan report, `409
-tmdb_not_configured` on `/enrich`). Design: [UC2 spec](docs/architecture/specs/tmdb-metadata.md),
+Without a key the server starts anyway (`metadata: null` in the scan report — also null
+when the post-scan enrichment could not run, see the log — and `409 tmdb_not_configured`
+on `/enrich`). Design: [UC2 spec](docs/architecture/specs/tmdb-metadata.md),
 [ADR-0003](docs/architecture/decisions/0003-tmdb-metadata.md).
 
 `ffprobe` (FFmpeg) must be installed. A library root must be `MEDIA_ROOT` or a folder under

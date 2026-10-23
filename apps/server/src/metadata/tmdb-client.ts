@@ -54,7 +54,7 @@ export interface TmdbEpisode {
   readonly vote_count: number;
 }
 
-/** The six operations UC2 needs; the metadata service depends on this, tests inject a fake. */
+/** The five operations UC2 needs; the metadata service depends on this, tests inject a fake. */
 export interface TmdbClient {
   /** `/search/movie` or `/search/tv`; `year` filters the release / first-air year when set. */
   search(kind: TmdbKind, title: string, year: number | null): Promise<readonly TmdbCandidate[]>;
@@ -68,7 +68,11 @@ export interface TmdbClient {
   image(path: string, size: string): Promise<Uint8Array>;
 }
 
-/** Thrown when TMDB answers an error status (after the single 429 retry) or an invalid payload. */
+/**
+ * Thrown when TMDB answers an error status (after the single 429 retry). Two statuses are
+ * synthetic: `200` for a payload the schemas reject, `400` for an image path or image
+ * base URL refused before any request, and `413` for an image over `IMAGE_MAX_BYTES`.
+ */
 export class TmdbRequestError extends Error {
   constructor(
     readonly path: string,
@@ -89,12 +93,21 @@ export interface TmdbClientOptions {
 }
 
 const API_BASE = 'https://api.themoviedb.org/3';
+/** TMDB answers in well under a second; a hung socket must not stall a whole run. */
 const REQUEST_TIMEOUT_MS = 15_000;
+/** `Retry-After` is honoured up to this; a longer wait is better reported as a failure. */
 const RETRY_AFTER_CAP_S = 10;
 /** Only TMDB-shaped image paths may become a URL (ADR-0003 § 4). */
 const IMAGE_PATH = /^\/[A-Za-z0-9]+\.(?:jpg|png)$/;
+/** The image CDN TMDB announces; any other configured host is refused (no open fetch). */
+const IMAGE_HOST = 'image.tmdb.org';
+/** A w1280 backdrop weighs ~500 KB; anything near this is not an image we want on disk. */
+export const IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+/** Upper bounds on provider strings so a hostile payload cannot bloat a row. */
+const TEXT_MAX = 10_000;
+const NAME_MAX = 500;
 
-const nullableString = z.string().nullable().optional();
+const nullableString = z.string().max(NAME_MAX).nullable().optional();
 
 const candidateList = z.array(
   z.object({
@@ -109,18 +122,20 @@ const findResponse = z.object({ movie_results: candidateList, tv_results: candid
 const castList = z
   .array(
     z.object({
-      name: z.string(),
-      character: z.string().optional().default(''),
+      name: z.string().max(NAME_MAX),
+      character: z.string().max(NAME_MAX).optional().default(''),
       profile_path: nullableString,
       order: z.number().int().optional().default(0),
     }),
   )
   .optional()
   .default([]);
-const genreList = z.array(z.object({ id: z.number().int(), name: z.string() })).default([]);
+const genreList = z
+  .array(z.object({ id: z.number().int(), name: z.string().max(NAME_MAX) }))
+  .default([]);
 const detailsCommon = {
   id: z.number().int(),
-  overview: z.string().optional().default(''),
+  overview: z.string().max(TEXT_MAX).optional().default(''),
   genres: genreList,
   vote_average: z.number().optional().default(0),
   vote_count: z.number().int().optional().default(0),
@@ -130,13 +145,13 @@ const detailsCommon = {
 };
 const movieDetails = z.object({
   ...detailsCommon,
-  title: z.string(),
+  title: z.string().max(NAME_MAX),
   release_date: nullableString,
   runtime: z.number().int().nullable().optional(),
 });
 const tvDetails = z.object({
   ...detailsCommon,
-  name: z.string(),
+  name: z.string().max(NAME_MAX),
   first_air_date: nullableString,
   episode_run_time: z.array(z.number().int()).optional().default([]),
 });
@@ -144,8 +159,8 @@ const seasonResponse = z.object({
   episodes: z.array(
     z.object({
       episode_number: z.number().int(),
-      name: z.string().optional().default(''),
-      overview: z.string().optional().default(''),
+      name: z.string().max(NAME_MAX).optional().default(''),
+      overview: z.string().max(TEXT_MAX).optional().default(''),
       still_path: nullableString,
       air_date: nullableString,
       runtime: z.number().int().nullable().optional(),
@@ -155,8 +170,14 @@ const seasonResponse = z.object({
   ),
 });
 const configurationResponse = z.object({
-  images: z.object({ secure_base_url: z.string().url() }),
+  images: z.object({ secure_base_url: z.url() }),
 });
+
+/** The announced image base URL, or null unless it is `https://image.tmdb.org/...`. */
+function pinnedImageBase(announced: string): string | null {
+  const url = new URL(announced);
+  return url.protocol === 'https:' && url.hostname === IMAGE_HOST ? url.toString() : null;
+}
 
 type CandidateRow = z.infer<typeof candidateList>[number];
 
@@ -172,10 +193,14 @@ function normaliseCast(cast: readonly CastRow[]): readonly TmdbCastMember[] {
   return cast.map((member) => ({ ...member, profile_path: member.profile_path ?? null }));
 }
 
-/** Builds the real client over `fetch`; one instance per server, no state but the image base URL. */
+/**
+ * Builds the real client over `fetch`; one instance per server, no state but the image base
+ * URL (read lazily from `/configuration` on the first image download, cached for the
+ * client's life, forgotten when that call fails).
+ */
 export function createTmdbClient(options: TmdbClientOptions): TmdbClient {
   const delay = options.delay ?? ((ms) => new Promise((done) => setTimeout(done, ms)));
-  let imageBaseUrl: Promise<string> | null = null;
+  let imageBaseUrl: Promise<z.infer<typeof configurationResponse>> | null = null;
 
   async function request(
     path: string,
@@ -192,11 +217,29 @@ export function createTmdbClient(options: TmdbClientOptions): TmdbClient {
     });
     if (response.status === 429 && !retried) {
       const retryAfter = Number.parseInt(response.headers.get('retry-after') ?? '1', 10);
+      await response.body?.cancel(); // Release the connection before waiting.
       await delay(Math.min(Number.isNaN(retryAfter) ? 1 : retryAfter, RETRY_AFTER_CAP_S) * 1000);
       return request(path, params, true);
     }
-    if (!response.ok) throw new TmdbRequestError(path, response.status);
+    if (!response.ok) {
+      await response.body?.cancel();
+      throw new TmdbRequestError(path, response.status);
+    }
     return response.json();
+  }
+
+  /** `/configuration` is read on the first image of the client's life, then memoised. */
+  async function imageBase(): Promise<string> {
+    const pending = (imageBaseUrl ??= parsed('/configuration', {}, configurationResponse));
+    try {
+      const base = pinnedImageBase((await pending).images.secure_base_url);
+      if (base === null) throw new TmdbRequestError('/configuration', 400);
+      return base;
+    } catch (error) {
+      // A failed configuration call must not poison later runs; only forget our own promise.
+      if (imageBaseUrl === pending) imageBaseUrl = null;
+      throw error;
+    }
   }
 
   async function parsed<T>(
@@ -273,18 +316,21 @@ export function createTmdbClient(options: TmdbClientOptions): TmdbClient {
 
     async image(path, size) {
       if (!IMAGE_PATH.test(path)) throw new TmdbRequestError('/image', 400);
-      imageBaseUrl ??= parsed('/configuration', {}, configurationResponse).then(
-        (body) => body.images.secure_base_url,
-      );
-      const base = await imageBaseUrl.catch((error: unknown) => {
-        imageBaseUrl = null; // A failed configuration call must not poison later runs.
-        throw error;
-      });
+      const base = await imageBase();
+      // No redirect: the pinned host must be the one that serves the bytes.
       const response = await options.fetch(`${base}${size}${path}`, {
+        redirect: 'error',
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
-      if (!response.ok) throw new TmdbRequestError(`/image${path}`, response.status);
-      return new Uint8Array(await response.arrayBuffer());
+      const announced = Number(response.headers.get('content-length') ?? 0);
+      if (!response.ok || announced > IMAGE_MAX_BYTES) {
+        await response.body?.cancel();
+        throw new TmdbRequestError(`/image${path}`, response.ok ? 413 : response.status);
+      }
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      // The header may lie or be absent: the bytes actually read are what count.
+      if (bytes.byteLength > IMAGE_MAX_BYTES) throw new TmdbRequestError(`/image${path}`, 413);
+      return bytes;
     },
   };
 }

@@ -47,11 +47,12 @@ export function buildApp(options: AppOptions): FastifyInstance {
   const repository = new LibraryRepository(options.db);
   const scanner = new LibraryScanner(repository, options.probe, options.mediaRoot);
   const metadata = options.tmdb
-    ? new MetadataService(
-        new MetadataRepository(options.db),
-        options.tmdb,
-        new ArtworkCache(options.artworkDir, options.tmdb),
-      )
+    ? new MetadataService({
+        repository: new MetadataRepository(options.db),
+        client: options.tmdb,
+        artwork: new ArtworkCache(options.artworkDir, options.tmdb),
+        logger: app.log,
+      })
     : null;
   registerLibraryRoutes(app, {
     repository,

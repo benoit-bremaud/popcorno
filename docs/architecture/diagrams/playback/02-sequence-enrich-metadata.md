@@ -33,43 +33,53 @@ sequenceDiagram
     API-->>O: 409 enrich_running
   else
     API->>MS: enrich(library, {refresh})
-    MS->>TC: configuration()
-    TC-->>MS: image base URL
-    MS->>DB: listPending(libraryId, refresh) — films, series, unknown
+    MS->>DB: countLookedUp(libraryId) → skipped (0 when refresh)
+    MS->>DB: listPending(libraryId, refresh) — films, series, unknown; series with a pending episode
     loop Each pending title (sequential)
-      alt providerIds.tmdb
+      alt providerIds.tmdb (whole number)
         MS-->>MS: candidate id = tag
       else providerIds.imdb
-        MS->>TC: findByImdb(imdbId)
+        MS->>TC: findByImdb(kind, imdbId)
+        TC-->>MS: candidates[]
+        MS->>MM: pickMatch(candidates, null)
       else
         MS->>TC: search(kind, title, year)
-        TC-->>MS: results[]
-        MS->>MM: pickMatch(results, title, year)
-        opt No result with the year
-          MS->>TC: search(kind, title) — no year
-          MS->>MM: pickMatch(results, title, year ±1)
+        TC-->>MS: candidates[]
+        MS->>MM: pickMatch(candidates, year)
+        opt No candidate with the year
+          MS->>TC: search(kind, title, null) — no year
+          MS->>MM: pickMatch(candidates, year, tolerance 1)
         end
       end
       alt No candidate
-        MS->>DB: markUnmatched(mediaId) — fetchedAt set, tmdbId null
+        MS->>DB: markUnmatched(mediaId, fetchedAt) — tmdbId null, columns cleared
       else
         MS->>TC: details(kind, id) — append_to_response=credits
-        alt Request failed (network, 5xx, 429 twice, invalid payload)
-          MS-->>MS: report failed, row untouched
+        alt 404 on a tagged id (spec 4b)
+          MS->>DB: markUnmatched(mediaId, fetchedAt)
+        else Request failed (network, timeout, 5xx, 429 twice, invalid payload)
+          MS-->>MS: report failed, log the cause, row untouched
         else
-          TC-->>MS: payload
-          MS->>MM: toMetadata(payload) → MetadataInput
+          TC-->>MS: TmdbTitleDetails
+          MS->>MM: toMetadataInput(details) → MetadataInput
           MS->>AC: cache(posterPath, w500), cache(backdropPath, w1280)
-          AC->>TC: image(path, size) — once per new file
-          AC-->>MS: digest file names (or null on failure)
-          MS->>DB: saveMetadata(mediaId, input, artwork)
+          opt First image of the client's life
+            AC->>TC: image(path, size) → GET /configuration (base URL, cached, pinned to image.tmdb.org)
+          end
+          AC->>TC: image(path, size) — once per new file, ≤ 10 MB, no redirect
+          AC-->>MS: digest file names (or null on failure, logged)
+          MS->>DB: saveMetadata(mediaId, input, fetchedAt) — replaces title
           opt Series
-            MS->>DB: listEpisodes(seriesId) — grouped by season
-            loop Each season
-              MS->>TC: season(id, n)
-              MS->>MM: toEpisodeMetadata(episode) per episode row
-              MS->>AC: cache(stillPath, w500)
-              MS->>DB: saveMetadata(episodeId, …)
+            MS->>DB: listEpisodes(seriesRowId) — grouped by season
+            loop Each season (sequential)
+              MS->>TC: season(tmdbId, n)
+              alt Season request failed (spec 8a)
+                MS-->>MS: log, episodes keep their fields
+              else
+                MS->>MM: toEpisodeInput(episode, {tmdbId}, parsedTitle) per episode row
+                MS->>AC: cache(stillPath, w500)
+                MS->>DB: saveMetadata(episodeId, input, fetchedAt) — or markLookedUp when absent (8b)
+              end
             end
           end
         end
@@ -84,12 +94,16 @@ sequenceDiagram
 
 - The TMDB client is the single HTTP egress of the server; it receives `fetch` by
   injection so tests assert URLs and headers without a socket. It adds the Bearer header
-  and the `language` parameter, retries once on `429` after `Retry-After`, and strips the
-  key from any error it throws.
+  and the `language` parameter and retries once on `429` after `Retry-After` (capped at
+  10 s). The key only ever travels in the header: a `TmdbRequestError` carries the path
+  and the status, nothing else.
 - Only `query` (title), `year` / `first_air_date_year` and a provider id ever appear in a
   request (data-flow 06).
-- Matcher and mapper are pure: fixtures in, typed values out, no I/O.
-- The artwork cache validates the TMDB path before building a URL and names files by the
-  SHA-256 of that path; the serving route (`GET /artwork/:file`) accepts digests only.
-- Failures are per title: the report lists them, the run continues, the scan that
-  included the run still returns `200`.
+- Matcher and mapper are pure: fixtures in, typed values out, no I/O. An episode's
+  `tmdbId` is the series id (TMDB episode ids are not stored).
+- The client validates the TMDB path before building a URL; the cache names files by the
+  SHA-256 of `size + path` (the same path at two sizes gives two files); the serving route
+  (`GET /artwork/:file`) accepts digests only.
+- Failures are per title: the report lists them, the log keeps the cause, the run
+  continues, the scan that included the run still returns `200` (`metadata: null` when
+  the include itself could not run).

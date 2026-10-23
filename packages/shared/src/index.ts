@@ -150,7 +150,10 @@ export interface EnrichBody {
   readonly refresh?: boolean;
 }
 
-/** Response of `POST /libraries/:id/scan`; `metadata` is null when `TMDB_API_KEY` is not set. */
+/**
+ * Response of `POST /libraries/:id/scan`; `metadata` is null when `TMDB_API_KEY` is not
+ * set or when the post-scan enrichment could not run (e.g. one already in flight — logged).
+ */
 export interface ScanReport {
   readonly added: number;
   readonly updated: number;

@@ -25,7 +25,7 @@ on 2026-10-23.
 
 | Criterion                        | Weight | A                                                   | B                                                | C                                        |
 | -------------------------------- | -----: | --------------------------------------------------- | ------------------------------------------------ | ---------------------------------------- |
-| KISS / YAGNI (surface used)      |     30 | 5 — six endpoints, one function each                | 2 — hundreds of methods, 6 used                  | 2 — same                                 |
+| KISS / YAGNI (surface used)      |     30 | 5 — five operations, one function each              | 2 — hundreds of methods, 5 used                  | 2 — same                                 |
 | Testability (HTTP mocked)        |     25 | 5 — inject `fetch`, assert the exact URL            | 3 — mock the module or `fetch` under it          | 3 — same                                 |
 | Type safety of what we read      |     20 | 4 — zod schemas we own, strict, no `any`            | 4 — typed, but trusts the wire                   | 2 — loose typings                        |
 | Maintenance / supply-chain risk  |     15 | 5 — no dependency                                   | 3 — one more package to audit                    | 2 — less active                          |
@@ -36,7 +36,8 @@ Points: A = 150+125+80+75+20 = 450 · B = 60+75+80+45+50 = 310 · C = 60+75+40+3
 Sensitivity (Coverage 40, KISS 10, others unchanged → sum 110,
 renormalised to 100: Coverage 36, KISS 9, Test 23, Types 18, Maint 14): A ≈ 45+115+72+70+72
 = 374, B ≈ 18+69+72+42+180 = 381 — B edges ahead only when "future API coverage" weighs
-more than a third of the decision, which contradicts YAGNI for a six-endpoint client.
+more than a third of the decision, which contradicts YAGNI for a five-operation client
+(search, find, details, season, image — six TMDB endpoints behind them).
 **A.**
 
 ## 2. Matching strategy
@@ -90,7 +91,7 @@ kind would break every `kind === 'film'` branch of UC1 for a presentation concer
 ## 4. Artwork caching
 
 - **A** — download the poster (`w500`) and the backdrop (`w1280`) once per matched title
-  into `data/artwork/<sha256(tmdbPath)>.<ext>`; the TMDB path is validated
+  into `data/artwork/<sha256(size + tmdbPath)>.<ext>`; the TMDB path is validated
   (`^/[A-Za-z0-9]+\.(jpg|png)$`) before it is used in a URL, the file name is the digest
   (never the provider string), the folder is created under the data dir and the serving
   route `GET /artwork/:file` accepts only `^[a-f0-9]{64}\.(jpg|png)$`. Cast photos are
@@ -111,7 +112,11 @@ Points: A = 175+100+80+100 = 455 · B = 0+125+100+80 = 305 · C = 175+50+20+100 
 Sensitivity: B needs Privacy ≤ 5 to win; the vision rules it out. **A.** Verified
 facts: poster sizes `w92 … w780, original`, backdrop sizes `w300, w780, w1280, original`
 (`GET /configuration`, Context7). The two sizes are constants; the base URL
-`https://image.tmdb.org/t/p/` is read from the configuration endpoint once per run.
+`https://image.tmdb.org/t/p/` is read from the configuration endpoint on the first image
+download of the client's life and cached (forgotten if the call fails). Hardening added
+at review: the announced base URL must be `https://image.tmdb.org`, image fetches follow
+no redirect, and a body over 10 MB (announced or actual) is refused — an image we would
+never want on disk, far above a w1280 backdrop (~500 KB).
 
 ## 5. Trigger, refresh and rate limit
 
@@ -160,8 +165,14 @@ goes out as the `language` query parameter and carries no personal data.
 ## Consequences
 
 - No new runtime dependency. `TMDB_API_KEY` is read once by `loadConfig`, passed to the
-  client factory, never logged (the error handler already hides messages; the client
-  strips the key from any error it throws).
+  client factory, never logged (the error handler already hides messages; the key only
+  travels in the `Authorization` header and a `TmdbRequestError` carries the path and
+  status only).
+- Per-title failures are reported by title in the response and logged with their cause
+  (`warn`), so a DB error or a schema drift is distinguishable from TMDB being down.
+- A file UC1 finds changed has its `metadataFetchedAt` reset (a new title, year or tag
+  deserves a new lookup), and a series with an episode never looked up is pending again,
+  so files added later are enriched by a plain run.
 - Migration `0001_tmdb-metadata` adds nullable columns only; existing rows are
   "pending" and the first scan or enrich fills them.
 - The web player (#5) reads posters from `/artwork/<digest>.jpg`; it never builds a TMDB

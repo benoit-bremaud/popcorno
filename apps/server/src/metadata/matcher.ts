@@ -78,9 +78,9 @@ export function toMetadataInput(details: TmdbTitleDetails): MetadataInput {
 }
 
 /**
- * One episode of a season payload → what gets persisted on the episode row. Genres and
- * cast belong to the series; the still goes to `posterPath`; the parsed title is kept when
- * TMDB has no name for the episode.
+ * One episode of a season payload → what gets persisted on the episode row. `tmdbId` is
+ * the series id (episode ids are not stored); genres and cast belong to the series; the
+ * still goes to `posterPath`; the parsed title is kept when TMDB has no name for the episode.
  */
 export function toEpisodeInput(
   episode: TmdbEpisode,

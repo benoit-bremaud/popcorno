@@ -114,7 +114,11 @@ export class LibraryRepository {
       const inserted = tx
         .insert(media)
         .values({ id, ...values })
-        .onConflictDoUpdate({ target: [media.libraryId, media.filePath], set: values })
+        // A file the scan found changed may carry a new title, year or tag: look it up again.
+        .onConflictDoUpdate({
+          target: [media.libraryId, media.filePath],
+          set: { ...values, metadataFetchedAt: null },
+        })
         .returning({ id: media.id })
         .get();
       const mediaId = inserted?.id ?? id;

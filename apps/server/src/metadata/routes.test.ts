@@ -33,6 +33,15 @@ function makeClient(): TmdbClient {
   };
 }
 
+/** A promise the test resolves by hand, to hold a TMDB call open. */
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve: (value: T) => void = () => {};
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 describe('metadata routes', () => {
   let app: FastifyInstance;
   let mediaRoot: string;
@@ -182,19 +191,40 @@ describe('metadata routes', () => {
   it('answers 409 enrich_running while a run is in flight', async () => {
     const library = await createLibrary();
     await writeFile(join(root, 'The Matrix (1999).mkv'), 'x');
-    let release: () => void = () => {};
-    const blocked = new Promise<never[]>((resolve) => (release = () => resolve([])));
-    (tmdb.search as ReturnType<typeof vi.fn>).mockImplementation(() => blocked);
+    const blocked = deferred<readonly { id: number; year: number }[]>();
+    vi.mocked(tmdb.search).mockImplementation(() => blocked.promise);
 
     // The scan's include holds the lock; the explicit call must be refused meanwhile.
     const scan = app.inject({ method: 'POST', url: `/libraries/${library.id}/scan` });
     await vi.waitFor(() => expect(tmdb.search).toHaveBeenCalled());
     const concurrent = await app.inject({ method: 'POST', url: `/libraries/${library.id}/enrich` });
-    release();
+    blocked.resolve([]);
     await scan;
 
     expect(concurrent.statusCode).toBe(409);
     expect(concurrent.json<ApiError>().error).toBe('enrich_running');
+  });
+
+  it('scans with metadata null when the include finds an enrichment already running', async () => {
+    const library = await createLibrary();
+    await writeFile(join(root, 'The Matrix (1999).mkv'), 'x');
+    await app.inject({ method: 'POST', url: `/libraries/${library.id}/scan` });
+    const blocked = deferred<readonly { id: number; year: number }[]>();
+    vi.mocked(tmdb.search).mockImplementation(() => blocked.promise);
+
+    // The explicit refresh holds the lock; the scan's include is refused and the scan still 200s.
+    const refresh = app.inject({
+      method: 'POST',
+      url: `/libraries/${library.id}/enrich`,
+      payload: { refresh: true },
+    });
+    await vi.waitFor(() => expect(tmdb.search).toHaveBeenCalled());
+    const scan = await app.inject({ method: 'POST', url: `/libraries/${library.id}/scan` });
+    blocked.resolve([{ id: 603, year: 1999 }]);
+    await refresh;
+
+    expect(scan.statusCode).toBe(200);
+    expect(scan.json<ScanReport>().metadata).toBeNull();
   });
 
   describe('without a TMDB key', () => {
