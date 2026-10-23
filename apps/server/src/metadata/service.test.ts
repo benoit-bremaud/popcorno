@@ -118,7 +118,7 @@ describe('MetadataService', () => {
     seriesLibrary: Library,
     seriesId: string,
     season: number,
-    number: number,
+    number: number | null,
   ): string {
     return libraries.upsertMedia(
       seriesLibrary.id,
@@ -132,8 +132,8 @@ describe('MetadataService', () => {
         providerIds: {},
         edition: null,
         part: null,
-        filePath: `/s/Dark/S${season}E${number}.mkv`,
-        relativePath: `Dark/S${season}E${number}.mkv`,
+        filePath: `/s/Dark/S${season}E${number ?? 'x'}.mkv`,
+        relativePath: `Dark/S${season}E${number ?? 'x'}.mkv`,
         fileSize: 1,
         fileMtimeMs: 1,
         durationSec: null,
@@ -546,6 +546,48 @@ describe('MetadataService', () => {
 
     expect(image.mock.calls.filter(([path]) => path.startsWith('/still-'))).toHaveLength(3);
     expect(maxInFlight).toBe(1);
+  });
+
+  it('marks an unnumbered special looked up so the series is not revisited for it', async () => {
+    const series = libraries.createLibrary({ name: 'Series', rootPath: '/s', kind: 'series' });
+    const seriesId = libraries.findOrCreateSeries(series.id, 'Dark', 2017, {});
+    addEpisode(series, seriesId, 1, 1);
+    addEpisode(series, seriesId, 0, null);
+    const client = makeClient({
+      search: vi.fn(async () => [{ id: 70523, year: 2017 }]),
+      season: vi.fn(async () => [episode(1, 'Secrets')]),
+    });
+    const service = makeService(client);
+
+    await service.enrich(series);
+    const second = await service.enrich(series);
+
+    expect(second).toEqual({ matched: 0, unmatched: [], failed: [], skipped: 1 });
+    expect(client.details).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears a series and its episodes back to parsed data when a refresh unmatches it', async () => {
+    const series = libraries.createLibrary({ name: 'Series', rootPath: '/s', kind: 'series' });
+    const seriesId = libraries.findOrCreateSeries(series.id, 'Dark', 2017, {});
+    const e1 = addEpisode(series, seriesId, 1, 1);
+    const search = vi.fn<TmdbClient['search']>(async () => []);
+    search.mockResolvedValueOnce([{ id: 70523, year: 2017 }]);
+    const client = makeClient({
+      search,
+      details: vi.fn(async () => details(70523, 'Dark (TMDB)')),
+      season: vi.fn(async () => [episode(1, 'Secrets')]),
+    });
+    const service = makeService(client);
+    await service.enrich(series);
+
+    await service.enrich(series, { refresh: true });
+
+    const rows = libraries.listMedia(series.id);
+    expect(rows.find((row) => row.id === seriesId)).toMatchObject({ title: 'Dark' });
+    expect(rows.find((row) => row.id === seriesId)?.metadata).toMatchObject({ tmdbId: null });
+    const ep = rows.find((row) => row.id === e1);
+    expect(ep?.title).toBe('Dark');
+    expect(ep?.metadata).toMatchObject({ tmdbId: null, overview: null, posterPath: null });
   });
 
   it('does not re-ask an unmatched series although its episodes were never looked up', async () => {

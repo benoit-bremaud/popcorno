@@ -1,5 +1,5 @@
 import { alias } from 'drizzle-orm/sqlite-core';
-import { and, count, eq, exists, inArray, isNotNull, isNull, or } from 'drizzle-orm';
+import { and, count, eq, exists, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import type { MediaKind, ProviderIds } from '@popcorno/shared';
 import type { AppDatabase } from '../db/index.js';
 import { media } from '../db/schema.js';
@@ -126,11 +126,16 @@ export class MetadataRepository {
     this.db.update(media).set({ metadataFetchedAt: fetchedAt }).where(eq(media.id, id)).run();
   }
 
-  /** Records a lookup that found nothing: fetched, no TMDB id, other columns cleared. */
+  /**
+   * Records a lookup that found nothing: fetched, no TMDB id, other columns cleared and the
+   * parsed title restored. Applied to the row *and its episodes*, so a series that loses
+   * its match (refresh, corrected tag answering 404) leaves no stale episode data behind.
+   */
   markUnmatched(id: string, fetchedAt: string): void {
     this.db
       .update(media)
       .set({
+        title: sql`${media.parsedTitle}`,
         tmdbId: null,
         overview: null,
         genres: null,
@@ -143,7 +148,7 @@ export class MetadataRepository {
         backdropPath: null,
         metadataFetchedAt: fetchedAt,
       })
-      .where(eq(media.id, id))
+      .where(or(eq(media.id, id), eq(media.seriesId, id)))
       .run();
   }
 }

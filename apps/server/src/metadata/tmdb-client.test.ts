@@ -212,6 +212,40 @@ describe('createTmdbClient', () => {
     expect(configCalls).toBe(2);
   });
 
+  it('keeps one request in flight across concurrent callers (one queue per client)', async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const fetch = vi.fn<FetchFn>(async () => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((done) => setTimeout(done, 1));
+      inFlight -= 1;
+      return jsonResponse({ results: [] });
+    });
+    const client = makeClient(fetch);
+
+    // Two libraries enriching at once share the client.
+    await Promise.all([
+      client.search('movie', 'a', null),
+      client.search('tv', 'b', null),
+      client.search('movie', 'c', null),
+    ]);
+
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(maxInFlight).toBe(1);
+  });
+
+  it('frees the queue after a failed request', async () => {
+    const fetch = makeFetch({
+      '/movie/1': () => new Response('down', { status: 503 }),
+      '/search/movie': () => jsonResponse({ results: [] }),
+    });
+    const client = makeClient(fetch);
+
+    await expect(client.details('movie', 1)).rejects.toMatchObject({ status: 503 });
+    await expect(client.search('movie', 'x', null)).resolves.toEqual([]);
+  });
+
   it('retries once after a 429, waiting Retry-After seconds (capped at 10)', async () => {
     let calls = 0;
     const fetch = makeFetch({

@@ -171,6 +171,8 @@ goes out as the `language` query parameter and carries no personal data.
   `loadConfig`, passed to the client factory, never logged (the error handler already
   hides messages; the key only travels in the `Authorization` header and a
   `TmdbRequestError` carries the path and status only).
+- The client queues its own calls: one TMDB request at most is in flight per server,
+  whatever the number of libraries enriching at once (the 429 wait is outside the queue).
 - One `LibraryLock` per library, held by the scan route across the walk and the included
   enrichment and by the enrich route: without it an enrichment in flight could save a
   match for a file a concurrent scan had just re-parsed (the scanner and the service

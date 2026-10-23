@@ -143,8 +143,14 @@ export class MetadataService {
   /** Spec step 8: one season request per season present in the library. */
   private async enrichEpisodes(seriesRowId: string, tmdbId: number): Promise<void> {
     const bySeason = new Map<number, EpisodeRow[]>();
+    const fetchedAt = this.now().toISOString();
     for (const row of this.repository.listEpisodes(seriesRowId)) {
-      if (row.season === null || row.episode === null) continue;
+      // An unnumbered special cannot be matched; marking it looked up stops the series
+      // from being revisited for it on every run.
+      if (row.season === null || row.episode === null) {
+        this.repository.markLookedUp(row.id, fetchedAt);
+        continue;
+      }
       bySeason.set(row.season, [...(bySeason.get(row.season) ?? []), row]);
     }
     await sequentially([...bySeason], ([season, rows]) => this.enrichSeason(tmdbId, season, rows));

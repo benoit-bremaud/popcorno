@@ -231,6 +231,24 @@ async function readCapped(
 export function createTmdbClient(options: TmdbClientOptions): TmdbClient {
   const delay = options.delay ?? ((ms) => new Promise((done) => setTimeout(done, ms)));
   let imageBaseUrl: Promise<z.infer<typeof configurationResponse>> | null = null;
+  // Tail of the request queue: every call of this client, whatever the library, waits for
+  // the previous one, so one request at most is in flight server-wide (ADR-0003 § 5). The
+  // 429 wait happens outside the queue so it does not hold the slot.
+  let tail: Promise<void> = Promise.resolve();
+
+  async function serial<T>(task: () => Promise<T>): Promise<T> {
+    const previous = tail;
+    let release: () => void = () => undefined;
+    tail = new Promise<void>((done) => {
+      release = done;
+    });
+    try {
+      await previous;
+      return await task();
+    } finally {
+      release();
+    }
+  }
 
   async function request(
     path: string,
@@ -241,21 +259,25 @@ export function createTmdbClient(options: TmdbClientOptions): TmdbClient {
     for (const [key, value] of Object.entries({ ...params, language: options.language })) {
       url.searchParams.set(key, value);
     }
-    const response = await options.fetch(url, {
-      headers: { Authorization: `Bearer ${options.apiKey}`, Accept: 'application/json' },
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    const outcome = await serial(async (): Promise<{ retryAfter: number } | { body: unknown }> => {
+      const response = await options.fetch(url, {
+        headers: { Authorization: `Bearer ${options.apiKey}`, Accept: 'application/json' },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+      if (response.status === 429 && !retried) {
+        const retryAfter = Number.parseInt(response.headers.get('retry-after') ?? '1', 10);
+        await response.body?.cancel(); // Release the connection before waiting.
+        return { retryAfter: Number.isNaN(retryAfter) ? 1 : retryAfter };
+      }
+      if (!response.ok) {
+        await response.body?.cancel();
+        throw new TmdbRequestError(path, response.status);
+      }
+      return { body: await response.json() };
     });
-    if (response.status === 429 && !retried) {
-      const retryAfter = Number.parseInt(response.headers.get('retry-after') ?? '1', 10);
-      await response.body?.cancel(); // Release the connection before waiting.
-      await delay(Math.min(Number.isNaN(retryAfter) ? 1 : retryAfter, RETRY_AFTER_CAP_S) * 1000);
-      return request(path, params, true);
-    }
-    if (!response.ok) {
-      await response.body?.cancel();
-      throw new TmdbRequestError(path, response.status);
-    }
-    return response.json();
+    if ('body' in outcome) return outcome.body;
+    await delay(Math.min(outcome.retryAfter, RETRY_AFTER_CAP_S) * 1000);
+    return request(path, params, true);
   }
 
   /** `/configuration` is read on the first image of the client's life, then memoised. */
@@ -347,20 +369,20 @@ export function createTmdbClient(options: TmdbClientOptions): TmdbClient {
     async image(path, size) {
       if (!IMAGE_PATH.test(path)) throw new TmdbRequestError('/image', 400);
       const base = await imageBase();
-      // No redirect: the pinned host must be the one that serves the bytes.
-      const response = await options.fetch(`${base}${size}${path}`, {
-        redirect: 'error',
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      const bytes = await serial(async () => {
+        // No redirect: the pinned host must be the one that serves the bytes.
+        const response = await options.fetch(`${base}${size}${path}`, {
+          redirect: 'error',
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        });
+        const announced = Number(response.headers.get('content-length') ?? 0);
+        if (!response.ok || announced > IMAGE_MAX_BYTES) {
+          await response.body?.cancel();
+          throw new TmdbRequestError(`/image${path}`, response.ok ? 413 : response.status);
+        }
+        // The header may lie or be absent: count the bytes as they arrive, stop past the cap.
+        return response.body ? readCapped(response.body.getReader(), IMAGE_MAX_BYTES) : null;
       });
-      const announced = Number(response.headers.get('content-length') ?? 0);
-      if (!response.ok || announced > IMAGE_MAX_BYTES) {
-        await response.body?.cancel();
-        throw new TmdbRequestError(`/image${path}`, response.ok ? 413 : response.status);
-      }
-      // The header may lie or be absent: count the bytes as they arrive, stop past the cap.
-      const bytes = response.body
-        ? await readCapped(response.body.getReader(), IMAGE_MAX_BYTES)
-        : null;
       if (bytes === null) throw new TmdbRequestError(`/image${path}`, 413);
       return bytes;
     },
