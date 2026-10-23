@@ -74,7 +74,7 @@ Extensions:
    poster. A titles-without-genre row ("Other titles") keeps un-enriched titles reachable in
    the *By genre* view.
 
-Play is #7: the dialog shows no play button yet.
+Play is #7 ([direct-play spec](direct-play.md)).
 
 ## 5. Non-functional
 

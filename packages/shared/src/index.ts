@@ -171,6 +171,7 @@ export type ApiErrorCode =
   | 'tmdb_not_configured'
   | 'enrich_running'
   | 'artwork_not_found'
+  | 'media_not_found'
   | 'internal';
 
 /** Error body of every non-2xx response. */
@@ -178,3 +179,5 @@ export interface ApiError {
   readonly error: ApiErrorCode;
   readonly details?: unknown;
 }
+
+export * from './playback.js';

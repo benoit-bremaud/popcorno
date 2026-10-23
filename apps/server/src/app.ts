@@ -11,6 +11,7 @@ import { ArtworkCache } from './metadata/artwork-cache.js';
 import { MetadataRepository } from './metadata/repository.js';
 import { registerMetadataRoutes } from './metadata/routes.js';
 import { MetadataService } from './metadata/service.js';
+import { registerPlaybackRoutes } from './playback/routes.js';
 import type { TmdbClient } from './metadata/tmdb-client.js';
 
 /** Everything `buildApp` needs; `index.ts` fills it from the config, tests from fakes. */
@@ -69,6 +70,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
     lock,
     artworkDir: options.artworkDir,
   });
+  registerPlaybackRoutes(app, { repository, mediaRoot: options.mediaRoot });
 
   return app;
 }

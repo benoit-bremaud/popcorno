@@ -46,3 +46,8 @@ export async function loadCatalog(fetchFn: Fetch = fetch): Promise<Media[]> {
 export function artworkUrl(file: string): string {
   return `${API}/artwork/${encodeURIComponent(file)}`;
 }
+
+/** URL of the direct-play stream `GET /media/:id/file` (HTTP Range, ADR-0005). */
+export function mediaFileUrl(mediaId: string): string {
+  return `${API}/media/${encodeURIComponent(mediaId)}/file`;
+}
