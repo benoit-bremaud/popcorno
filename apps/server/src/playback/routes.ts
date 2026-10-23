@@ -1,10 +1,11 @@
-import { createReadStream } from 'node:fs';
-import { realpath, stat } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { open, realpath } from 'node:fs/promises';
+import type { FileHandle } from 'node:fs/promises';
 import { extname } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { apiError, invalid } from '../http.js';
-import { resolveUnderRoot } from '../library/path-guard.js';
+import { isAtOrUnderRoot, resolveUnderRoot } from '../library/path-guard.js';
 import type { LibraryRepository } from '../library/repository.js';
 import { parseRange } from './range.js';
 
@@ -17,6 +18,7 @@ export interface PlaybackRoutesDeps {
 
 const mediaParams = z.object({ id: z.uuid() });
 
+// Served types; which of them the browser may play directly is decided in shared `playback.ts`.
 const MIME_TYPES: Readonly<Partial<Record<string, string>>> = {
   '.mp4': 'video/mp4',
   '.m4v': 'video/mp4',
@@ -24,32 +26,42 @@ const MIME_TYPES: Readonly<Partial<Record<string, string>>> = {
   '.mkv': 'video/x-matroska',
 };
 
-/** A file to stream: its real path and size, after the confinement check. */
+/** An open file to stream: its handle, size and MIME type, after the confinement check. */
 interface ServableFile {
-  readonly path: string;
+  readonly handle: FileHandle;
   readonly size: number;
+  readonly mime: string;
 }
 
 /**
  * Re-runs the path guard on every request (spec 4b): the real file must sit under the real
- * library root, itself the real `MEDIA_ROOT` or under it. Null on any escape or I/O error.
+ * library root, itself the real `MEDIA_ROOT` or under it. The checked real path is then
+ * opened without following a final symlink and sized from that handle, so a swap after the
+ * check cannot change what is served. Null on any escape or I/O error.
  */
 async function confinedFile(
   filePath: string,
   rootPath: string,
   mediaRoot: string,
 ): Promise<ServableFile | null> {
+  let handle: FileHandle | null = null;
   try {
     const [file, root, realMediaRoot] = await Promise.all([
       realpath(filePath),
       realpath(rootPath),
       realpath(mediaRoot),
     ]);
-    const rootConfined = root === realMediaRoot || resolveUnderRoot(realMediaRoot, root) !== null;
-    if (!rootConfined || resolveUnderRoot(root, file) === null) return null;
-    const info = await stat(file);
-    return info.isFile() ? { path: file, size: info.size } : null;
+    if (!isAtOrUnderRoot(realMediaRoot, root) || resolveUnderRoot(root, file) === null) return null;
+    handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const info = await handle.stat();
+    if (!info.isFile()) {
+      await handle.close();
+      return null;
+    }
+    const mime = MIME_TYPES[extname(file).toLowerCase()] ?? 'application/octet-stream';
+    return { handle, size: info.size, mime };
   } catch {
+    await handle?.close();
     return null;
   }
 }
@@ -69,23 +81,24 @@ export function registerPlaybackRoutes(app: FastifyInstance, deps: PlaybackRoute
       stored === null ? null : await confinedFile(stored.filePath, stored.rootPath, deps.mediaRoot);
     if (file === null) return reply.code(404).send(apiError('media_not_found'));
 
-    const range = parseRange(request.headers.range, file.size);
-    reply
-      .header('Accept-Ranges', 'bytes')
-      .header(
-        'Content-Type',
-        MIME_TYPES[extname(file.path).toLowerCase()] ?? 'application/octet-stream',
-      );
-    if (range === null) {
+    const wanted = parseRange(request.headers.range, file.size);
+    reply.header('Accept-Ranges', 'bytes');
+    if (wanted.kind === 'unsatisfiable') {
+      await file.handle.close();
       return reply.code(416).header('Content-Range', `bytes */${file.size}`).send();
     }
-    if (range === undefined) {
-      return reply.code(200).header('Content-Length', file.size).send(createReadStream(file.path));
+    reply.header('Content-Type', file.mime);
+    if (wanted.kind === 'whole') {
+      return reply
+        .code(200)
+        .header('Content-Length', file.size)
+        .send(file.handle.createReadStream());
     }
+    const { start, end } = wanted.range;
     return reply
       .code(206)
-      .header('Content-Range', `bytes ${range.start}-${range.end}/${file.size}`)
-      .header('Content-Length', range.end - range.start + 1)
-      .send(createReadStream(file.path, range));
+      .header('Content-Range', `bytes ${start}-${end}/${file.size}`)
+      .header('Content-Length', end - start + 1)
+      .send(file.handle.createReadStream({ start, end }));
   });
 }

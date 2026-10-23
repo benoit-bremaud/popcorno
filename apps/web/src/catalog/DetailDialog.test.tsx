@@ -94,6 +94,38 @@ describe('DetailDialog playback', () => {
     expect(screen.getByRole('dialog', { name: 'Playing Secrets' })).toBeInTheDocument();
   });
 
+  it('keeps the detail open when the player closes (Escape) on its own', async () => {
+    const { user, onClose } = renderDetail(heat);
+    await user.click(screen.getByRole('button', { name: '▶ Play' }));
+
+    (screen.getByRole('dialog', { name: 'Playing Heat' }) as HTMLDialogElement).close();
+
+    expect(screen.queryByRole('dialog', { name: 'Playing Heat' })).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('offers no Play button on an episode the browser cannot decode', () => {
+    const pilot = media({
+      id: 'pilot',
+      title: 'Secrets',
+      kind: 'episode',
+      relativePath: 'Dark/S01E01.mp4',
+      streams: H264_AAC,
+      season: 1,
+      episode: 1,
+    });
+    render(
+      <DetailDialog
+        item={media({ id: 'dark', title: 'Dark', kind: 'series', relativePath: null })}
+        seasons={[{ season: 1, episodes: [pilot] }]}
+        onClose={vi.fn()}
+        canPlay={() => ''}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Play Secrets' })).not.toBeInTheDocument();
+  });
+
   it('still closes the detail itself', async () => {
     const { user, onClose } = renderDetail(heat);
 

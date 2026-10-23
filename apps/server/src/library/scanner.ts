@@ -4,7 +4,7 @@ import { extname, join, relative, sep } from 'node:path';
 import type { Library, ScanReport, SkipReason, SkippedFile } from '@popcorno/shared';
 import type { Prober } from './ffprobe.js';
 import { isExtra, parseMediaName } from './name-parser.js';
-import { resolveUnderRoot } from './path-guard.js';
+import { isAtOrUnderRoot, resolveUnderRoot } from './path-guard.js';
 import type { LibraryRepository } from './repository.js';
 
 /** What the walk produces; the scan route adds the `metadata` section (UC1's «include» of UC2). */
@@ -150,7 +150,7 @@ async function realRoot(rootPath: string, mediaRoot: string): Promise<string> {
   const info = await stat(rootPath).catch(() => null);
   if (!info?.isDirectory()) throw new RootUnreadableError(rootPath, 'is not a readable directory');
   const [real, realMediaRoot] = await Promise.all([realpath(rootPath), realpath(mediaRoot)]);
-  if (real !== realMediaRoot && resolveUnderRoot(realMediaRoot, real) === null) {
+  if (!isAtOrUnderRoot(realMediaRoot, real)) {
     throw new RootUnreadableError(rootPath, 'resolves outside MEDIA_ROOT');
   }
   return real;

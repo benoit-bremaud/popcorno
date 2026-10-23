@@ -33,6 +33,13 @@ describe('directPlayMime', () => {
     );
   });
 
+  it('ignores the codec case and dots in the file name', () => {
+    const streams = [stream('video', 'H264'), stream('audio', 'AAC')];
+    expect(directPlayMime({ relativePath: 'Mr. Robot S01E01.v2.mp4', streams })).toBe(
+      'video/mp4; codecs="avc1.640028, mp4a.40.2"',
+    );
+  });
+
   it('accepts a silent video', () => {
     expect(directPlayMime({ relativePath: 'c.mp4', streams: [stream('video', 'h264')] })).toBe(
       'video/mp4; codecs="avc1.640028"',
@@ -56,12 +63,11 @@ describe('decidePlayback', () => {
   const media = { relativePath: 'a.mp4', streams: h264Aac };
 
   it.each(['probably', 'maybe'])('plays directly when the browser answers %s', (answer) => {
-    const asked: string[] = [];
-    const decision = decidePlayback(media, (mime) => {
-      asked.push(mime);
-      return answer;
+    const decision = decidePlayback(media, () => answer);
+    expect(decision).toEqual({
+      mode: 'direct',
+      mime: 'video/mp4; codecs="avc1.640028, mp4a.40.2"',
     });
-    expect(decision).toEqual({ mode: 'direct', mime: asked[0] });
   });
 
   it('is unsupported when the browser answers an empty string', () => {

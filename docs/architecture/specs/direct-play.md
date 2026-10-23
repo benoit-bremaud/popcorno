@@ -24,11 +24,15 @@
 - **Container** comes from the file extension of `relativePath` (the scan does not store
   the ffprobe format): `.mp4` / `.m4v` → `video/mp4`, `.webm` → `video/webm`. Anything
   else (`.mkv`, `.avi`, `.ts`, …) → not direct-playable.
-- **Codecs**: the first video stream and the first audio stream (scan order) are mapped to
-  RFC 6381 strings: `h264` → `avc1.640028`, `hevc` → `hvc1.1.6.L120.90`, `av1` →
-  `av01.0.08M.08`, `vp9` → `vp09.00.40.08`, `vp8` → `vp8`, `aac` → `mp4a.40.2`, `mp3` →
-  `mp4a.6B` (mp4) / `mp3`, `opus` → `opus`, `vorbis` → `vorbis`, `flac` → `flac`. An
-  unknown codec → not direct-playable. A file with no video stream → not playable.
+- **Codecs**: the first video stream and the first audio stream (scan order, codec name
+  case-insensitive) are mapped to RFC 6381 strings per container (`CODECS` in
+  `packages/shared/src/playback.ts`):
+  - MP4: `h264` → `avc1.640028`, `hevc` → `hvc1.1.6.L120.90`, `av1` → `av01.0.08M.08`,
+    `vp9` → `vp09.00.40.08`, `aac` → `mp4a.40.2`, `mp3` → `mp4a.6B`, `opus`, `flac`;
+  - WebM: `vp8`, `vp9`, `av1` → `av01.0.08M.08`, `opus`, `vorbis`.
+  A codec missing from its container's table → not direct-playable. A file with no video
+  stream → not playable. Profile and bit depth are not probed yet: a 10-bit H.264 file is
+  offered and ends in extension 3a.
 - **Browser check**: the MIME string `video/mp4; codecs="avc1.640028, mp4a.40.2"` is
   passed to `canPlay` (in the web app: `HTMLVideoElement.canPlayType`); `""` → not
   playable, `"maybe"` / `"probably"` → direct play.
@@ -62,13 +66,15 @@ Extensions:
 - 4b. Stored path no longer under the library root or `MEDIA_ROOT` (moved root, symlink
   swapped after the scan) or no longer readable → `404 media_not_found` (no detail leaked).
 - 4c. No `Range` header → `200` with the whole body (streamed, never buffered).
-- 4d. Unsatisfiable or malformed range (`bytes=999999999-`, several ranges) → `416` with
-  `Content-Range: bytes */<size>`. Multi-range is not supported (browsers never send it
-  for media).
+- 4d. A valid single range past the end (`bytes=999999999-`) → `416` with
+  `Content-Range: bytes */<size>`. A malformed or multi-range header is ignored (RFC 9110
+  §14.2) → `200` with the whole file; browsers never send multi-range for media.
 
 ## 4. Non-functional
 
-- Streaming via `fs.createReadStream(start, end)`: constant memory per request.
+- The checked real path is opened once (`O_NOFOLLOW`), sized with `fstat` and streamed from
+  that handle (`createReadStream({ start, end })`): constant memory, no swap between check
+  and read.
 - Design tokens and motion rules of ADR-0004: the player fades in with
   `--duration-overlay` / `--ease-out`; reduced motion keeps the fade only.
 - Keyboard: Play reachable by Tab, Escape closes the player, focus returns to Play.

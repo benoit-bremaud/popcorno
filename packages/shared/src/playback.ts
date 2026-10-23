@@ -54,7 +54,7 @@ export function directPlayMime(media: Pick<Media, 'relativePath' | 'streams'>): 
   const audio = firstOfType(media.streams, 'audio');
   const selected = audio === null ? [video] : [video, audio];
   const codecs = selected.map((stream) => CODECS[container][stream.codec.toLowerCase()]);
-  if (codecs.some((codec) => codec === undefined)) return null;
+  if (codecs.includes(undefined)) return null;
   return `video/${container}; codecs="${codecs.join(', ')}"`;
 }
 

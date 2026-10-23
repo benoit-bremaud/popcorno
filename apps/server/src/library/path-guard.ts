@@ -12,3 +12,8 @@ export function resolveUnderRoot(root: string, candidate: string): string | null
   if (rel === '' || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return null;
   return absolute;
 }
+
+/** True when `candidate` is `root` itself or strictly under it (same caveats as above). */
+export function isAtOrUnderRoot(root: string, candidate: string): boolean {
+  return resolve(candidate) === resolve(root) || resolveUnderRoot(root, candidate) !== null;
+}

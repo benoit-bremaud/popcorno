@@ -113,6 +113,56 @@ describe('GET /media/:id/file', () => {
 
     expect(response.statusCode).toBe(416);
     expect(response.headers['content-range']).toBe(`bytes */${CONTENT.length}`);
+    expect(response.headers['content-type']).toBeUndefined();
+    expect(response.body).toBe('');
+  });
+
+  it.each(['bytes=0-1,5-6', 'items=0-1'])(
+    'ignores a range it does not support (%s) and sends the whole file',
+    async (range) => {
+      const film = await scanned('Heat (1995).mp4');
+
+      const response = await get(film.id, range);
+
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toBe(CONTENT);
+    },
+  );
+
+  it('answers HEAD with the headers only', async () => {
+    const film = await scanned('Heat (1995).mp4');
+
+    const response = await app.inject({ method: 'HEAD', url: `/media/${film.id}/file` });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-length']).toBe(String(CONTENT.length));
+    expect(response.body).toBe('');
+  });
+
+  it('serves a library whose root is MEDIA_ROOT itself', async () => {
+    await writeFile(join(mediaRoot, 'Heat (1995).mp4'), CONTENT);
+    const library = (
+      await app.inject({
+        method: 'POST',
+        url: '/libraries',
+        payload: { name: 'All', rootPath: mediaRoot, kind: 'films' },
+      })
+    ).json<Library>();
+    await app.inject({ method: 'POST', url: `/libraries/${library.id}/scan` });
+    const [film] = (
+      await app.inject({ method: 'GET', url: `/libraries/${library.id}/media` })
+    ).json<Media[]>();
+    if (film === undefined) throw new Error('not scanned');
+
+    expect((await get(film.id, 'bytes=0-1')).body).toBe('01');
+  });
+
+  it('answers 404 when a directory now stands at the stored path', async () => {
+    const film = await scanned('Heat (1995).mp4');
+    await unlink(join(root, 'Heat (1995).mp4'));
+    await mkdir(join(root, 'Heat (1995).mp4'));
+
+    expect((await get(film.id)).json<ApiError>().error).toBe('media_not_found');
   });
 
   it('rejects an id that is not a uuid with 400', async () => {
@@ -166,7 +216,7 @@ describe('GET /media/:id/file', () => {
     const response = await get(film.id);
 
     expect(response.statusCode).toBe(404);
-    expect(response.body).not.toContain('secret');
+    expect(response.json<ApiError>().error).toBe('media_not_found');
   });
 
   it('answers 404 when the library root was moved out of MEDIA_ROOT', async () => {
@@ -175,6 +225,6 @@ describe('GET /media/:id/file', () => {
     await rename(root, moved);
     await symlink(moved, root);
 
-    expect((await get(film.id)).statusCode).toBe(404);
+    expect((await get(film.id)).json<ApiError>().error).toBe('media_not_found');
   });
 });
