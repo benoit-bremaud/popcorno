@@ -81,6 +81,27 @@ Points: A = 175+150+40+75 = 440 · B = 105+120+100+60 = 385 · C = 70+120+40+60 
 **A**; deep links come with a router when #7 adds a player route (the reducer then
 reads its initial state from the URL).
 
+## 5. Revision v2 — gilding, night blue, violet, motion (owner, 2026-10-23)
+
+The owner liked v1 and asked for discreet gilding, a little dark blue and violet, never
+above the dominant red and black, plus modern animations everywhere. Applied as accents
+on top of option A (no new matrix: the owner set the direction, the only open question —
+how much — is bounded by the rule "never above red and black"):
+
+| Token                  | Value                 | Role (verified contrast on `#0e0b0d`)                             |
+| ---------------------- | --------------------- | ----------------------------------------------------------------- |
+| `--color-gold`         | `#c9a24a`             | rating stars, hairlines, hover ring, active-chip inner line (8.2:1) |
+| `--color-navy`         | `#0f1a33`             | room gradient at the top of the page, hero side shade             |
+| `--color-violet`       | `#8b5cc4` / glow 28 % | glows only, never text (4.1:1, above the 3:1 non-text minimum)    |
+
+Motion follows the `ui-motion` doctrine: transform and opacity only, `ease-out`
+`cubic-bezier(0.23, 1, 0.32, 1)`, UI ≤ 300 ms, 60 ms stagger capped at six rows, hover
+gated behind `(hover: hover) and (pointer: fine)`, press `scale(0.97)`. Rare moments get
+the delight: hero rise and slow Ken Burns pan, staggered row entrance, gold sheen across a
+hovered poster, dialog opening from `scale(0.96)` over a blurred backdrop, option levels
+sliding in as they appear (progressive disclosure). `prefers-reduced-motion`: travel,
+scale and loops are removed, fades stay.
+
 ## Consequences
 
 - `styles/tokens.css` is rewritten with the A palette; components use tokens only.

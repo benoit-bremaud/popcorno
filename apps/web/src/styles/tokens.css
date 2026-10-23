@@ -1,4 +1,4 @@
-/* Design tokens (ADR-0004 "velvet house") — the only place where raw colors, spacing and type sizes are written. */
+/* Design tokens (ADR-0004 v2 "velvet house") — the only place where raw colors, spacing and type sizes are written. */
 :root {
   color-scheme: dark;
 
@@ -14,6 +14,20 @@
   --color-accent-text: #e8495c; /* red text, focus ring, rating: 5.2:1 on bg */
   --color-on-accent: #ffffff;
   --color-scrim: rgb(14 11 13 / 0.8);
+
+  /* Accents (v2): discreet gilding, night blue and violet — never above the red and black. */
+  --color-gold: #c9a24a; /* rating, hairlines, hover ring: 8.2:1 on bg */
+  --color-gold-soft: rgb(201 162 74 / 0.35);
+  --color-gold-sheen: rgb(255 226 150 / 0.18);
+  --color-navy: #0f1a33;
+  --color-navy-deep: #0b1222;
+  --color-violet: #8b5cc4; /* glows and non-text accents only: 4.1:1 on bg */
+  --color-violet-glow: rgb(139 92 196 / 0.28);
+  --gradient-room:
+    radial-gradient(ellipse 80% 50% at 50% -10%, var(--color-navy) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 40% at 100% 0%, var(--color-violet-glow) 0%, transparent 70%),
+    var(--color-bg);
+  --gradient-gilt: linear-gradient(90deg, transparent, var(--color-gold) 50%, transparent);
 
   /* Spacing: 4 px base. */
   --space-1: 0.25rem;
@@ -50,15 +64,25 @@
   --shadow-raised: 0 8px 24px rgb(0 0 0 / 0.5);
   --poster-width: 9rem;
   --focus-ring: 2px solid var(--color-accent-text);
-  --duration-fast: 150ms;
-  --duration-base: 250ms;
-  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* Motion (skill ui-motion tokens). */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --duration-press: 120ms;
+  --duration-ui: 200ms;
+  --duration-overlay: 300ms;
+  --duration-enter: 500ms;
+  --duration-ken-burns: 24s;
+  --stagger: 60ms;
+  --travel: 12px;
+  --lift: -6px;
 }
 
+/* Reduced motion: gentler, not zero — fades stay, travel, scale and loops go. */
 @media (prefers-reduced-motion: reduce) {
   :root {
-    --duration-fast: 0ms;
-    --duration-base: 0ms;
+    --travel: 0px;
+    --lift: 0px;
+    --stagger: 0ms;
   }
 }
 
@@ -70,7 +94,9 @@
 
 body {
   margin: 0;
-  background: var(--color-bg);
+  min-height: 100vh;
+  background: var(--gradient-room);
+  background-attachment: fixed;
   color: var(--color-text);
   font-family: var(--font-body);
   font-size: var(--text-base);

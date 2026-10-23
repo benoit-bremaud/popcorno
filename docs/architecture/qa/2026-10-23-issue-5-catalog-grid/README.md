@@ -21,6 +21,11 @@ genre rows then an _Other titles_ row with the un-enriched `Home Video`; control
 (`05-films-by-genre-1440-r2.png`). Keyboard and focus return are covered by the Playwright
 smoke (Escape, Enter on a poster, close button; 8/8 runs green with `--repeat-each 8`).
 
+Round 3 (ADR-0004 v2 accents and motion): gold rating stars, gilt hairlines, gold ring and
+sheen on the hovered poster, violet glow under the hero, blurred backdrop behind the
+dialog; red and black stay dominant; console 0 errors / 0 warnings
+(`06-home-v2-hover-1440.png`, `07-detail-v2-1440.png`).
+
 Limits: episode titles show the series name because the double's season payload did not
 match the client's schema (one server warning, scan unaffected) — a double issue, not a
 catalog one. Artwork is synthetic.

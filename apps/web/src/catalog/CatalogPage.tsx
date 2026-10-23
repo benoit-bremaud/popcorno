@@ -119,7 +119,10 @@ export function CatalogPage({ load = loadCatalog }: Props): React.JSX.Element {
         genres={availableGenres(typed)}
         dispatch={dispatch}
       />
-      <CatalogBody items={items} state={state} onOpen={onOpen} />
+      {/* Keyed by the view state: each new choice fades its content in. */}
+      <div className="view" key={JSON.stringify(state)}>
+        <CatalogBody items={items} state={state} onOpen={onOpen} />
+      </div>
       {open !== null && (
         <DetailDialog
           key={open.seq}

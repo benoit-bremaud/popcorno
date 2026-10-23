@@ -27,8 +27,8 @@ export function CatalogBody({ items, state, onOpen }: Props): React.JSX.Element 
   if (state.type === 'all') {
     return (
       <>
-        {homeRows(items).map((row) => (
-          <PosterRow key={row.key} row={row} onOpen={onOpen} />
+        {homeRows(items).map((row, index) => (
+          <PosterRow key={row.key} row={row} index={index} onOpen={onOpen} />
         ))}
       </>
     );
@@ -53,8 +53,8 @@ export function CatalogBody({ items, state, onOpen }: Props): React.JSX.Element 
   }
   return (
     <>
-      {byGenreRows(typed).map((row) => (
-        <PosterRow key={row.key} row={row} onOpen={onOpen} />
+      {byGenreRows(typed).map((row, index) => (
+        <PosterRow key={row.key} row={row} index={index} onOpen={onOpen} />
       ))}
     </>
   );

@@ -16,6 +16,11 @@ from a browser — on the LAN first, over the internet later.
 It serves **the owner's own files only**. No content source, no indexer, no download
 feature is ever part of the product.
 
+Other tools on the same server (e.g. Radarr / Sonarr / Lidarr organising folders, Seerr
+for requests) may **coexist**: whatever lands in a library folder is picked up by the
+next scan. Popcorno never calls them (owner decision 2026-10-23, MCDA in the #5 chat:
+coexistence 450 / read-only integration 380 / full integration 170).
+
 ## Borrowed strengths
 
 | From     | Kept                                                                   |
