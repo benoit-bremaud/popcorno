@@ -31,8 +31,8 @@ export function parseRange(header: string | undefined, size: number): RangeReque
     return { kind: 'partial', range: { start: Math.max(0, size - length), end: size - 1 } };
   }
   const start = Number(first);
-  const end = last === '' ? size - 1 : Math.min(Number(last), size - 1);
-  if (last !== '' && Number(last) < start) return WHOLE; // Invalid range spec: ignored.
+  const end = last === '' ? Infinity : Number(last);
+  if (end < start) return WHOLE; // Invalid range spec: ignored.
   if (start >= size) return UNSATISFIABLE;
-  return { kind: 'partial', range: { start, end } };
+  return { kind: 'partial', range: { start, end: Math.min(end, size - 1) } };
 }
