@@ -69,9 +69,12 @@ reaches the end of its walk with the key configured.
    mtime) has its `metadataFetchedAt` reset, so it is pending again. Episodes are handled
    through their series (step 8).
 3. For each pending title, one after the other:
-4. System resolves a candidate: with `providerIds.tmdb` (a whole number), the id itself; with
+4. System resolves a candidate: with `providerIds.tmdb` (a whole number), the id itself; a
+   matched series revisited for new episodes keeps its stored `tmdbId` (no new search);
+   with
    `providerIds.imdb`, `GET /find/{imdb}?external_source=imdb_id`; otherwise
-   `GET /search/movie?query=<title>&year=<year>` for a film library,
+   `GET /search/movie?query=<title>&year=<year>` for a film library (`<title>` is the
+   parsed title, never TMDB's display title),
    `GET /search/tv?query=<title>&first_air_date_year=<year>` for a series library. The
    pure matcher keeps the first candidate whose year equals the parsed year, else the
    first result when no year was parsed.

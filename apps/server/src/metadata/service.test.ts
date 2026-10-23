@@ -478,8 +478,12 @@ describe('MetadataService', () => {
     const series = libraries.createLibrary({ name: 'Series', rootPath: '/s', kind: 'series' });
     const seriesId = libraries.findOrCreateSeries(series.id, 'Dark', 2017, {});
     addEpisode(series, seriesId, 1, 1);
+    // TMDB renames the series; a second search under any title would find nothing.
+    const search = vi.fn<TmdbClient['search']>(async () => []);
+    search.mockResolvedValueOnce([{ id: 70523, year: 2017 }]);
     const client = makeClient({
-      search: vi.fn(async () => [{ id: 70523, year: 2017 }]),
+      search,
+      details: vi.fn(async () => details(70523, 'Dark (TMDB)')),
       season: vi.fn(async () => [episode(1, 'Secrets'), episode(2, 'Lies')]),
     });
     const service = makeService(client);
@@ -489,9 +493,40 @@ describe('MetadataService', () => {
     const report = await service.enrich(series);
     const afterwards = await service.enrich(series);
 
-    expect(report).toEqual({ matched: 1, unmatched: [], failed: [], skipped: 1 });
+    // The revisit reuses the stored match and counts as processed, not skipped.
+    expect(report).toEqual({ matched: 1, unmatched: [], failed: [], skipped: 0 });
+    expect(search).toHaveBeenCalledTimes(1);
+    const seriesRow = libraries.listMedia(series.id).find((row) => row.id === seriesId);
+    expect(seriesRow?.metadata).toMatchObject({ tmdbId: 70523 });
     expect(libraries.listMedia(series.id).find((row) => row.id === e2)?.title).toBe('Lies');
     expect(afterwards).toEqual({ matched: 0, unmatched: [], failed: [], skipped: 1 });
+  });
+
+  it('downloads the episode stills of a season one after the other', async () => {
+    const series = libraries.createLibrary({ name: 'Series', rootPath: '/s', kind: 'series' });
+    const seriesId = libraries.findOrCreateSeries(series.id, 'Dark', 2017, {});
+    addEpisode(series, seriesId, 1, 1);
+    addEpisode(series, seriesId, 1, 2);
+    addEpisode(series, seriesId, 1, 3);
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const image = vi.fn<TmdbClient['image']>(async () => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await Promise.resolve(); // Yield once so a concurrent download could overlap.
+      inFlight -= 1;
+      return new Uint8Array([1]);
+    });
+    const client = makeClient({
+      search: vi.fn(async () => [{ id: 70523, year: 2017 }]),
+      season: vi.fn(async () => [episode(1, 'A'), episode(2, 'B'), episode(3, 'C')]),
+      image,
+    });
+
+    await makeService(client).enrich(series);
+
+    expect(image.mock.calls.filter(([path]) => path.startsWith('/still-'))).toHaveLength(3);
+    expect(maxInFlight).toBe(1);
   });
 
   it('does not re-ask an unmatched series although its episodes were never looked up', async () => {

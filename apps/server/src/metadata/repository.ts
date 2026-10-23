@@ -9,9 +9,15 @@ import type { MetadataInput } from './matcher.js';
 export interface PendingTitle {
   readonly id: string;
   readonly kind: MediaKind;
+  /** The parsed title (`parsedTitle`): the search key, never TMDB's display title. */
   readonly title: string;
   readonly year: number | null;
   readonly providerIds: ProviderIds;
+  /**
+   * The match kept from a previous lookup when the row is only revisited for new episodes
+   * (non-refresh run); null when the row was never looked up, reset by a rescan, or refreshed.
+   */
+  readonly knownTmdbId: number | null;
 }
 
 /** An episode row of a series, located by its parsed season and number. */
@@ -50,13 +56,15 @@ export class MetadataRepository {
           ),
         ),
     );
-    return this.db
+    const rows = this.db
       .select({
         id: media.id,
         kind: media.kind,
-        title: media.title,
+        title: media.parsedTitle,
         year: media.year,
         providerIds: media.providerIds,
+        tmdbId: media.tmdbId,
+        fetchedAt: media.metadataFetchedAt,
       })
       .from(media)
       .where(
@@ -68,6 +76,10 @@ export class MetadataRepository {
             ),
       )
       .all();
+    return rows.map(({ tmdbId, fetchedAt, ...row }) => ({
+      ...row,
+      knownTmdbId: !refresh && fetchedAt !== null ? tmdbId : null,
+    }));
   }
 
   /** Titles of the library already looked up (what a non-refresh run leaves untouched). */

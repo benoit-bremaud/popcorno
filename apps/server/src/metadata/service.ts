@@ -71,8 +71,10 @@ export class MetadataService {
   async enrich(library: Library, options: EnrichOptions = {}): Promise<EnrichReport> {
     const refresh = options.refresh ?? false;
     const kind: TmdbKind = library.kind === 'films' ? 'movie' : 'tv';
-    const skipped = refresh ? 0 : this.repository.countLookedUp(library.id);
     const pending = this.repository.listPending(library.id, refresh);
+    // A looked-up series revisited for new episodes is processed, not skipped.
+    const revisited = pending.filter((title) => title.knownTmdbId !== null).length;
+    const skipped = refresh ? 0 : this.repository.countLookedUp(library.id) - revisited;
     const report = { matched: 0, unmatched: [] as EnrichTitle[], failed: [] as EnrichTitle[] };
     await sequentially(pending, async (title) => {
       const outcome = await this.enrichTitle(kind, title);
@@ -109,6 +111,8 @@ export class MetadataService {
   private async resolveId(kind: TmdbKind, title: PendingTitle): Promise<number | null> {
     const tag = title.providerIds.tmdb ?? '';
     if (TMDB_ID.test(tag)) return Number.parseInt(tag, 10);
+    // A matched series revisited for new episodes keeps its match: no new search to lose it.
+    if (title.knownTmdbId !== null) return title.knownTmdbId;
     if (title.providerIds.imdb) {
       return (
         pickMatch(await this.client.findByImdb(kind, title.providerIds.imdb), null)?.id ?? null
@@ -161,15 +165,18 @@ export class MetadataService {
       return;
     }
     const fetchedAt = this.now().toISOString();
-    const inputs = await Promise.all(
-      rows.map(async (row): Promise<[string, MetadataInput | null]> => {
-        const episode = episodes.find((candidate) => candidate.episode_number === row.episode);
-        if (!episode) return [row.id, null];
-        const input = toEpisodeInput(episode, { tmdbId }, row.title);
-        const still = await this.cacheArtwork(input.posterPath, POSTER_SIZE);
-        return [row.id, { ...input, posterPath: still }];
-      }),
-    );
+    const inputs: [string, MetadataInput | null][] = [];
+    // One still at a time, like every other TMDB request (ADR-0003 § 5).
+    await sequentially(rows, async (row) => {
+      const episode = episodes.find((candidate) => candidate.episode_number === row.episode);
+      if (!episode) {
+        inputs.push([row.id, null]);
+        return;
+      }
+      const input = toEpisodeInput(episode, { tmdbId }, row.title);
+      const still = await this.cacheArtwork(input.posterPath, POSTER_SIZE);
+      inputs.push([row.id, { ...input, posterPath: still }]);
+    });
     for (const [id, input] of inputs) {
       // Spec 8b: an episode absent from the payload is marked looked-up, its fields kept.
       if (input) this.repository.saveMetadata(id, input, fetchedAt);
