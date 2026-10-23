@@ -9,6 +9,8 @@ export default tseslint.config(
       '**/coverage/**',
       '**/node_modules/**',
       '**/*.config.{js,mjs,ts}',
+      // QA evidence: throwaway Node scripts kept next to the transcripts they produced.
+      'docs/architecture/qa/**',
     ],
   },
   js.configs.recommended,
