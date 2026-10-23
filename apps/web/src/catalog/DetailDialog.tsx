@@ -4,6 +4,7 @@ import type { CanPlay, Media } from '@popcorno/shared';
 import { artworkUrl } from '../api.js';
 import { browserCanPlay } from '../playback/can-play.js';
 import { PlayerDialog } from '../playback/PlayerDialog.js';
+import type { PlaybackApi } from '../playback/PlayerDialog.js';
 import type { Season } from './catalog.js';
 
 type Props = {
@@ -12,6 +13,8 @@ type Props = {
   readonly onClose: () => void;
   /** The browser's decoder check; injected by tests (jsdom decodes nothing). */
   readonly canPlay?: CanPlay;
+  /** Playback server calls; injected by tests. */
+  readonly api?: PlaybackApi;
 };
 
 function facts(item: Media): string[] {
@@ -30,6 +33,7 @@ export function DetailDialog({
   seasons,
   onClose,
   canPlay = browserCanPlay,
+  api,
 }: Props): React.JSX.Element {
   const ref = useRef<HTMLDialogElement>(null);
   const [playing, setPlaying] = useState<Media | null>(null);
@@ -46,7 +50,9 @@ export function DetailDialog({
     trigger.current?.focus();
   }
 
-  const playable = (media: Media): boolean => decidePlayback(media, canPlay).mode === 'direct';
+  // Every file with a video stream plays: directly, or through HLS (spec hls-transcode R1).
+  const playable = (media: Media): boolean =>
+    media.kind !== 'series' && media.streams.some((stream) => stream.type === 'video');
 
   useEffect(() => {
     const dialog = ref.current;
@@ -86,18 +92,15 @@ export function DetailDialog({
             {item.title}
           </h2>
           <p className="detail__facts">{facts(item).join(' · ')}</p>
-          {item.kind !== 'series' &&
-            (playable(item) ? (
-              <button
-                type="button"
-                className="button detail__play"
-                onClick={(event) => play(item, event.currentTarget)}
-              >
-                ▶ Play
-              </button>
-            ) : (
-              <p className="detail__unplayable muted">Not playable in this browser yet.</p>
-            ))}
+          {playable(item) && (
+            <button
+              type="button"
+              className="button detail__play"
+              onClick={(event) => play(item, event.currentTarget)}
+            >
+              ▶ Play
+            </button>
+          )}
           {metadata !== null && metadata.genres.length > 0 && (
             <ul className="detail__genres" aria-label="Genres">
               {metadata.genres.map((genre) => (
@@ -136,7 +139,14 @@ export function DetailDialog({
           ))}
         </div>
       </div>
-      {playing !== null && <PlayerDialog item={playing} onClose={stop} />}
+      {playing !== null && (
+        <PlayerDialog
+          item={playing}
+          directPlay={decidePlayback(playing, canPlay).mode === 'direct'}
+          onClose={stop}
+          api={api}
+        />
+      )}
     </dialog>
   );
 }

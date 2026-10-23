@@ -1,4 +1,4 @@
-import type { Library, Media } from '@popcorno/shared';
+import type { Library, Media, PlaybackStart } from '@popcorno/shared';
 
 /** Prefix the dev server (and the production reverse proxy) forwards to the API. */
 const API = '/api';
@@ -50,4 +50,55 @@ export function artworkUrl(file: string): string {
 /** URL of the direct-play stream `GET /media/:id/file` (HTTP Range, ADR-0005). */
 export function mediaFileUrl(mediaId: string): string {
   return `${API}/media/${encodeURIComponent(mediaId)}/file`;
+}
+
+/** Why a playback could not start: another title holds the transcoder, or anything else. */
+export type PlaybackStartError = 'busy' | 'failed';
+
+/**
+ * `POST /playback/sessions` (spec hls-transcode §2.1): the server confirms direct play or
+ * starts an HLS session. URLs come back relative to the API and are prefixed here.
+ */
+export async function startPlayback(
+  mediaId: string,
+  directPlay: boolean,
+  fetchFn: Fetch = fetch,
+): Promise<PlaybackStart | PlaybackStartError> {
+  let response: Response;
+  try {
+    response = await fetchFn(`${API}/playback/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mediaId, directPlay }),
+    });
+  } catch {
+    return 'failed';
+  }
+  if (response.status === 503) return 'busy';
+  if (!response.ok) return 'failed';
+  const start = (await response.json()) as PlaybackStart;
+  return { ...start, url: `${API}${start.url}` };
+}
+
+/** Keeps a paused HLS session alive (ADR-0006 §4); a lost heartbeat is harmless. */
+export async function sendHeartbeat(sessionId: string, fetchFn: Fetch = fetch): Promise<void> {
+  try {
+    await fetchFn(`${API}/playback/sessions/${encodeURIComponent(sessionId)}/heartbeat`, {
+      method: 'POST',
+    });
+  } catch {
+    // The idle watchdog is the safety net.
+  }
+}
+
+/** Ends an HLS session; `keepalive` lets it leave even while the page unloads. */
+export async function stopPlayback(sessionId: string, fetchFn: Fetch = fetch): Promise<void> {
+  try {
+    await fetchFn(`${API}/playback/sessions/${encodeURIComponent(sessionId)}`, {
+      method: 'DELETE',
+      keepalive: true,
+    });
+  } catch {
+    // The idle watchdog is the safety net.
+  }
 }

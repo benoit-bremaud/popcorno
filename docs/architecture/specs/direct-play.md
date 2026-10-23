@@ -10,8 +10,8 @@
 - **R1** A viewer can play a film or an episode from its detail dialog when the browser
   can decode its container and every selected codec natively.
 - **R2** The viewer can seek anywhere in the file (HTTP Range, `206 Partial Content`).
-- **R3** A file the browser cannot read natively shows *Not playable in this browser yet*
-  instead of a Play button; the HLS transcode branch is #8.
+- **R3** ~~A file the browser cannot read natively shows *Not playable in this browser yet*~~
+  — superseded by #8: such a file plays through HLS ([spec](hls-transcode.md)).
 - **R4** The server streams only files it scanned: the id resolves to the stored real path,
   re-checked under the library root and `MEDIA_ROOT` (`path-guard`) at every request. No
   client-supplied path ever reaches the file system.
@@ -58,8 +58,8 @@ Main scenario:
 
 Extensions:
 
-- 1a. Decision *not playable* → no Play button; the muted note *Not playable in this
-  browser yet* is shown (R3).
+- 1a. Decision *not playable* → since #8, Play still shows and the server streams HLS
+  ([hls-transcode](hls-transcode.md)).
 - 3a. The media element raises an `error` (file vanished, decoder refused despite
   `canPlayType`) → the player shows *This file could not be played* with a Close button.
 - 4a. Unknown id or a row without file → `404 media_not_found`.

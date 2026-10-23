@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mock } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import type { ApiError, Library, Media, PlaybackStart, StreamInfo } from '@popcorno/shared';
 import { buildApp } from '../app.js';
@@ -25,7 +26,7 @@ describe('playback session routes', () => {
   let app: FastifyInstance;
   let base: string;
   let root: string;
-  let kills: ReturnType<typeof vi.fn>;
+  let kills: Mock<() => void>;
   let spawned: (readonly string[])[];
 
   beforeEach(async () => {
