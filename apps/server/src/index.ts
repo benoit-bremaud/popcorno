@@ -8,6 +8,8 @@ import { createTmdbClient } from './metadata/tmdb-client.js';
 
 const config = loadConfig(process.env);
 await mkdir(dirname(config.databasePath), { recursive: true });
+// `@fastify/static` checks its root at start-up; the cache would only create it on first write.
+await mkdir(config.artworkDir, { recursive: true });
 
 const app = buildApp({
   version: process.env['npm_package_version'] ?? '0.0.0',

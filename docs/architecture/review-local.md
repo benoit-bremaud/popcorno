@@ -19,6 +19,36 @@
 
 - Gate: **GREEN — merge authorised** once the PR review is handled (CI, Copilot / Codex, owner approval). Caveat recorded: the QA used a TMDB double; a replay against the real API with a key is filed as a Nice follow-up.
 
+## PR review rounds and final gate (PR #16)
+
+After the PR opened, CodeQL raised 2 alerts and Codex 15 findings over five rounds. All
+were fixed, each thread got an inline reply, and the sixth Codex round on `3a41acb` was
+clean. Owner decisions taken through MCDA: `@fastify/static` for the artwork route (CodeQL
+rate limiting), read access token only (no v3 key in URLs), a `parsed_title` grouping key
+(migration 0002), and one `LibraryLock` shared by scan and enrich.
+
+| Commit  | Fix |
+| ------- | --- |
+| 530d4d0 | test compares the parsed image hostname (CodeQL #12) |
+| 08cd7c8 | artwork served by `@fastify/static`, `serve: false` (CodeQL #11) |
+| 754100f | `parsed_title` grouping key, series tag propagation, read-token contract |
+| d9c9312 | shared `LibraryLock`; an unmatched series is not revisited |
+| 4b259a1 | a revisit keeps the stored match; stills serialised; `skipped` excludes revisits |
+| d9c7636 | poster then backdrop; image size cap enforced while streaming |
+| 3a41acb | one TMDB queue per server; unmatch clears the episodes; specials marked looked up |
+| final   | `ARTWORK_DIR` created at start-up (QA finding) |
+
+| Step        | Result (final head) |
+| ----------- | ------------------- |
+| 1 Tests     | ✅ 157 unit/integration (Vitest) · no E2E suite yet |
+| 2 Coverage  | tests ✅ 98.05 % stmts / 93.77 % branches / 93.75 % funcs / 98.36 % lines · docs ✅ every new export documented |
+| 3 SonarQube | ✅ PASSED (one S2201 found on d9c7636, fixed before push) |
+| 4 Secrets   | ✅ gitleaks clean · diff read: only the QA fake key |
+| 5 QA pass   | ✅ replayed on the built tree with the TMDB double: `qa/2026-10-23-issue-4-pr-review/` (429 retry and shared lock exercised; one start-up warn found and fixed) |
+| CI          | ✅ 9/9 checks on 3a41acb, CodeQL 0 open alert |
+
+- Gate: **GREEN**. The QA used a TMDB double; a replay against the real API is in #15.
+
 ## 🔴 Must Have
 
 - `apps/server/src/metadata/artwork-cache.ts:37` `[sonar]` · S4624 nested template literal · split into `digest + extname(path)` ✅

@@ -1,0 +1,28 @@
+== health
+{"status":"ok","version":"0.0.0"} 200
+== library 91f832fe-0dc3-4899-abba-4e02bd3137f5
+== scan
+{"added":2,"updated":0,"removed":0,"skipped":[],"metadata":{"matched":1,"unmatched":[{"title":"Home Video","year":null}],"failed":[],"skipped":0}}
+== media
+{"title":"Home Video","tmdb":null,"poster":null,"fetched":true}
+{"title":"The Matrix","tmdb":603,"poster":"a1b8fe1e07fe1c70efed6a13209bd0b2abb112d8db9537ab26895fe1b2a8a310.png","fetched":true}
+== artwork a1b8fe1e07fe1c70efed6a13209bd0b2abb112d8db9537ab26895fe1b2a8a310.png
+HTTP/1.1 200 OK
+cache-control: public, max-age=31536000, immutable
+content-type: image/png
+content-length: 70
+== traversal
+{"error":"invalid_request","details":[{"path":["file"],"message":"Invalid string: must match pattern /^[a-f0-9]{64}\\.(?:jpg|png)$/"}]} 400
+== missing
+{"error":"artwork_not_found"} 404
+== enrich plain
+{"matched":0,"unmatched":[],"failed":[],"skipped":2}
+== enrich refresh
+{"matched":1,"unmatched":[{"title":"Home Video","year":null}],"failed":[],"skipped":0}
+== enrich bad body
+{"error":"invalid_request","details":[{"path":["refresh"],"message":"Invalid input: expected boolean, received string"}]} 400
+== enrich unknown
+{"error":"library_not_found"} 404
+== concurrent scan+enrich
+{"error":"enrich_running"} enrich 409
+scan 200
