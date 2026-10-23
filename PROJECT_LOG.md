@@ -4,6 +4,23 @@ Chronological operational logbook (newest first). Complements `git log` with the
 context: merged PRs, decisions, tags, infra events. Not a release changelog — that is
 `CHANGELOG.md`.
 
+## 2026-10-23 — #5 catalog grid (PR #20 merged, `b3a3afa`)
+
+- **Conception** — the spec `docs/architecture/specs/catalog-grid.md` covers a benchmark of
+  Plex, Jellyfin, Netflix, Disney+ and Prime, plus UC3 / UC4. The catalog diagrams (use case,
+  sequence, component, controls state) are in place. ADR-0004 holds the design tokens:
+  palette A 480, Inter 450, reducer 440. Its v2 adds discreet gold, navy and violet accents
+  plus motion tokens. The vision now records coexistence with the *arr tools (450 / 380 / 170).
+- **Implementation** — the React catalog has a hero, rows by type, genre and top rated, and
+  progressive-disclosure controls. It also has a native `<dialog>` detail view whose
+  openings are versioned by a `seq` against the queued close event. No new server endpoint
+  was added (YAGNI).
+- **Gate** — 33 web tests at 100 % lines. The Playwright smoke passed 8/8 repeats. SonarQube
+  PASSED after 7 fixes (S6819, S6847, S4624). CI was 12/12 green. The Codex P2 findings were
+  fixed and answered inline. QA rounds 1–3 are in `qa/2026-10-23-issue-5-catalog-grid/`.
+  Squash-merged with owner approval.
+- **Filed** — #18 (users, email verification, remote access) and #19 (cast to LAN devices).
+
 ## 2026-10-23 — #4 TMDB metadata (PR #16 merged, `dfaaa61`)
 
 - **PR review** — CodeQL raised 2 alerts and Codex 15 findings over five rounds. All were
