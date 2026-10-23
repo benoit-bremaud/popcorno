@@ -164,10 +164,16 @@ goes out as the `language` query parameter and carries no personal data.
 
 ## Consequences
 
-- No new runtime dependency. `TMDB_API_KEY` is read once by `loadConfig`, passed to the
-  client factory, never logged (the error handler already hides messages; the key only
-  travels in the `Authorization` header and a `TmdbRequestError` carries the path and
-  status only).
+- One new runtime dependency, `@fastify/static`, serving `GET /artwork/:file` from
+  `ARTWORK_DIR` with `serve: false` (CodeQL flags a hand-rolled file read as
+  `js/missing-rate-limiting`). `TMDB_API_KEY` holds the API Read Access Token (the only
+  credential TMDB accepts as Bearer; the v3 key would travel in URLs), is read once by
+  `loadConfig`, passed to the client factory, never logged (the error handler already
+  hides messages; the key only travels in the `Authorization` header and a
+  `TmdbRequestError` carries the path and status only).
+- Replacing `title` by TMDB's would break UC1's series grouping (episodes are attached by
+  title + year), so migration `0002_parsed-title` adds `parsed_title`, written by the scan
+  only and back-filled from `title`; `findOrCreateSeries` matches on it.
 - Per-title failures are reported by title in the response and logged with their cause
   (`warn`), so a DB error or a schema drift is distinguishable from TMDB being down.
 - A file UC1 finds changed has its `metadataFetchedAt` reset (a new title, year or tag

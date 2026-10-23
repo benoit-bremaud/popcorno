@@ -27,7 +27,13 @@ export const media = sqliteTable(
       .notNull()
       .references(() => libraries.id, { onDelete: 'cascade' }),
     kind: text('kind', { enum: MEDIA_KINDS }).notNull(),
+    /** Display title: the parsed one until TMDB replaces it (ADR-0003). */
     title: text('title').notNull(),
+    /**
+     * The title as parsed from the file name, written by the scan only: the stable key that
+     * groups episodes under their `series` row even after TMDB renamed `title`.
+     */
+    parsedTitle: text('parsed_title').notNull().default(''),
     year: integer('year'),
     filePath: text('file_path'),
     relativePath: text('relative_path'),

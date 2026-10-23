@@ -15,6 +15,13 @@
       "when": 1792743152438,
       "tag": "0001_tmdb-metadata",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1792746639025,
+      "tag": "0002_parsed-title",
+      "breakpoints": true
     }
   ]
 }

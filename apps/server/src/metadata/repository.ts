@@ -89,8 +89,9 @@ export class MetadataRepository {
   }
 
   /**
-   * Writes the metadata columns of a row and replaces its `title` by the provider's;
-   * `posterPath` / `backdropPath` are cached file names.
+   * Writes the metadata columns of a row and replaces its `title` by the provider's
+   * (`parsedTitle`, the series grouping key, is never touched); `posterPath` /
+   * `backdropPath` are cached file names.
    */
   saveMetadata(id: string, input: MetadataInput, fetchedAt: string): void {
     this.db

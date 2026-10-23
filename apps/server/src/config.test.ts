@@ -42,6 +42,6 @@ describe('loadConfig', () => {
 
   it('treats an empty key or the .env.example placeholder as no key', () => {
     expect(loadConfig({ TMDB_API_KEY: '' }).tmdbApiKey).toBeNull();
-    expect(loadConfig({ TMDB_API_KEY: 'your-tmdb-api-key' }).tmdbApiKey).toBeNull();
+    expect(loadConfig({ TMDB_API_KEY: 'your-tmdb-read-access-token' }).tmdbApiKey).toBeNull();
   });
 });

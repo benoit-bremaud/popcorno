@@ -1,9 +1,12 @@
-import { chmod, mkdir, mkdtemp, rm, symlink, utimes, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, rename, rm, symlink, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Library } from '@popcorno/shared';
 import { openDatabase } from '../db/index.js';
+import type { AppDatabase } from '../db/index.js';
+import type { MetadataInput } from '../metadata/matcher.js';
+import { MetadataRepository } from '../metadata/repository.js';
 import type { ProbeResult, Prober } from './ffprobe.js';
 import { LibraryRepository } from './repository.js';
 import { LibraryScanner, RootUnreadableError, ScanRunningError } from './scanner.js';
@@ -11,6 +14,23 @@ import { LibraryScanner, RootUnreadableError, ScanRunningError } from './scanner
 const PROBED: ProbeResult = {
   durationSec: 120,
   streams: [{ type: 'video', codec: 'h264', width: 1280, height: 720, language: null }],
+};
+
+const NOW = '2026-10-23T10:00:00.000Z';
+
+/** What UC2 writes on a matched series: enough to rename it. */
+const SOPRANOS: MetadataInput = {
+  tmdbId: 1398,
+  title: 'The Sopranos',
+  overview: null,
+  genres: [],
+  releaseDate: null,
+  runtimeMin: null,
+  voteAverage: null,
+  voteCount: null,
+  cast: [],
+  posterPath: null,
+  backdropPath: null,
 };
 
 /** A prober that fails for the given path suffixes; one instance per test, nothing leaks. */
@@ -32,6 +52,7 @@ async function touch(root: string, relativePath: string): Promise<string> {
 
 describe('LibraryScanner', () => {
   let root: string;
+  let db: AppDatabase;
   let repository: LibraryRepository;
   let probe: ReturnType<typeof makeProbe>;
   let scanner: LibraryScanner;
@@ -39,7 +60,8 @@ describe('LibraryScanner', () => {
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'popcorno-scan-'));
-    repository = new LibraryRepository(openDatabase(':memory:'));
+    db = openDatabase(':memory:');
+    repository = new LibraryRepository(db);
     probe = makeProbe();
     scanner = new LibraryScanner(repository, probe, root);
     library = repository.createLibrary({ name: 'Films', rootPath: root, kind: 'films' });
@@ -79,6 +101,43 @@ describe('LibraryScanner', () => {
     const episodes = items.filter((item) => item.kind === 'episode');
     expect(episodes.map((item) => item.episode)).toEqual([1, 2]);
     expect(episodes.every((item) => item.seriesId === seriesRow?.id)).toBe(true);
+  });
+
+  it('attaches a later episode to a series TMDB has renamed (grouping by parsed title)', async () => {
+    const series = repository.createLibrary({ name: 'Series', rootPath: root, kind: 'series' });
+    await touch(root, 'The Sopranos (1999)/Season 01/The Sopranos S01E01.mkv');
+    await scanner.scan(series);
+    const metadata = new MetadataRepository(db);
+    const row = repository.listMedia(series.id).find((item) => item.kind === 'series');
+    metadata.saveMetadata(String(row?.id), { ...SOPRANOS, title: 'Les Soprano' }, NOW);
+    await touch(root, 'The Sopranos (1999)/Season 01/The Sopranos S01E02.mkv');
+
+    await scanner.scan(series);
+
+    const rows = repository.listMedia(series.id);
+    expect(rows.filter((item) => item.kind === 'series')).toHaveLength(1);
+    expect(rows.filter((item) => item.kind === 'episode').map((item) => item.seriesId)).toEqual([
+      row?.id,
+      row?.id,
+    ]);
+    expect(rows.find((item) => item.kind === 'series')?.title).toBe('Les Soprano');
+  });
+
+  it('takes a provider tag added to the folder of an existing series and queues it again', async () => {
+    const series = repository.createLibrary({ name: 'Series', rootPath: root, kind: 'series' });
+    await touch(root, 'Dark (2017)/Season 01/Dark S01E01.mkv');
+    await scanner.scan(series);
+    const metadata = new MetadataRepository(db);
+    const before = repository.listMedia(series.id).find((item) => item.kind === 'series');
+    metadata.markLookedUp(String(before?.id), NOW);
+    await rename(join(root, 'Dark (2017)'), join(root, 'Dark (2017) [tmdbid-70523]'));
+
+    await scanner.scan(series);
+
+    const after = repository.listMedia(series.id).find((item) => item.kind === 'series');
+    expect(after?.id).toBe(before?.id);
+    expect(after?.providerIds).toEqual({ tmdb: '70523' });
+    expect(metadata.listPending(series.id, false).map((item) => item.id)).toEqual([before?.id]);
   });
 
   it('keeps two series rows for a remake with the same title and another year', async () => {

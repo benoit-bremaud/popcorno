@@ -50,7 +50,8 @@ Owner.
   set; matched rows carry `tmdbId`,
   `overview`, `genres`, `releaseDate`, `runtimeMin`, `voteAverage`, `voteCount`,
   `cast` (top 10), `posterPath` and `backdropPath` pointing at cached files; the stored
-  `title` is replaced by TMDB's title for the configured language.
+  `title` is replaced by TMDB's title for the configured language (`parsedTitle`, the
+  series grouping key of UC1, keeps the file-name title).
 - Episodes of a matched series carry their own name, overview, still, air date and rating.
 - The response reports `{ matched, unmatched: [{ title, year }], failed: [{ title, year }], skipped }`.
 
@@ -88,8 +89,8 @@ reaches the end of its walk with the key configured.
    `GET /tv/{id}/season/{n}` once per season, and stores on each episode row the matching
    `episode_number`'s name, overview, still (cached like a poster, in `posterPath`), air
    date and rating; a multi-episode file (`episodeEnd`) takes the first episode's data.
-9. System saves the row (`metadataFetchedAt` = now, `title` replaced by TMDB's) and
-   counts it `matched`.
+9. System saves the row (`metadataFetchedAt` = now, `title` replaced by TMDB's,
+   `parsedTitle` untouched) and counts it `matched`.
 10. After the last title, System returns `200` with the report.
 
 ## Extensions
@@ -127,8 +128,11 @@ reaches the end of its walk with the key configured.
 
 ## Technology and data variations
 
-- Authentication: `Authorization: Bearer <TMDB_API_KEY>` (works for a v3 key or a v4
-  read token); `language=<TMDB_LANGUAGE>` on every request (default `en-US`).
+- Authentication: `Authorization: Bearer <TMDB_API_KEY>`, so `TMDB_API_KEY` must hold the
+  **API Read Access Token** (the long `eyJ…` token of the TMDB API settings page); the
+  short v3 key only works as a `?api_key=` query parameter, which would put the credential
+  in URLs and is therefore not supported. `language=<TMDB_LANGUAGE>` on every request
+  (default `en-US`).
 - Image base URL read lazily from `GET /configuration` (`images.secure_base_url`) on the
   first image download of the client's life, then cached (forgotten when that call
   fails); it must be `https://image.tmdb.org/…`, anything else is refused. Sizes are

@@ -23,6 +23,7 @@ classDiagram
     +string libraryId
     +MediaKind kind
     +string title
+    +string parsedTitle
     +int year
     +string relativePath
     +int durationSec

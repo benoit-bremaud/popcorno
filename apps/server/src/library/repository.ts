@@ -37,6 +37,10 @@ export interface StoredFile {
 /** SQLite binds at most 32 766 variables per statement; ids are deleted in chunks. */
 const DELETE_CHUNK = 500;
 
+function sameProviderIds(a: ProviderIds, b: ProviderIds): boolean {
+  return a.tmdb === b.tmdb && a.imdb === b.imdb;
+}
+
 const libraryColumns = {
   id: libraries.id,
   name: libraries.name,
@@ -81,35 +85,54 @@ export class LibraryRepository {
     );
   }
 
-  /** Finds the `series` row of a library by title and year, creating it on demand. */
+  /**
+   * Finds the `series` row of a library by parsed title and year, creating it on demand.
+   * The lookup uses `parsedTitle`, never `title`: TMDB may rename the series (ADR-0003) and
+   * a later episode must still join it. A tag parsed from the new episode's name that
+   * differs from the stored one wins (the owner's way to correct a wrong match) and queues
+   * the series for a new lookup.
+   */
   findOrCreateSeries(
     libraryId: string,
-    title: string,
+    parsedTitle: string,
     year: number | null,
     providerIds: ProviderIds,
   ): string {
     const existing = this.db
-      .select({ id: media.id })
+      .select({ id: media.id, providerIds: media.providerIds })
       .from(media)
       .where(
         and(
           eq(media.libraryId, libraryId),
           eq(media.kind, 'series'),
-          eq(media.title, title),
+          eq(media.parsedTitle, parsedTitle),
           year === null ? isNull(media.year) : eq(media.year, year),
         ),
       )
       .get();
-    if (existing) return existing.id;
+    if (existing) {
+      const tagged = Object.keys(providerIds).length > 0;
+      if (tagged && !sameProviderIds(existing.providerIds, providerIds)) {
+        this.db
+          .update(media)
+          .set({ providerIds, metadataFetchedAt: null })
+          .where(eq(media.id, existing.id))
+          .run();
+      }
+      return existing.id;
+    }
     const id = randomUUID();
-    this.db.insert(media).values({ id, libraryId, kind: 'series', title, year, providerIds }).run();
+    this.db
+      .insert(media)
+      .values({ id, libraryId, kind: 'series', title: parsedTitle, parsedTitle, year, providerIds })
+      .run();
     return id;
   }
 
   /** Inserts or replaces the row keyed by `(libraryId, filePath)` and its streams; returns the media id. */
   upsertMedia(libraryId: string, input: MediaInput, fileStreams: readonly StreamInfo[]): string {
     const id = randomUUID();
-    const values = { ...input, libraryId };
+    const values = { ...input, libraryId, parsedTitle: input.title };
     return this.db.transaction((tx) => {
       const inserted = tx
         .insert(media)

@@ -49,8 +49,9 @@ curl localhost:3000/libraries/<id>/media            # films / episodes with stre
 
 ### Metadata from TMDB
 
-Set `TMDB_API_KEY` (a free v3 key or v4 read token from
-<https://www.themoviedb.org/settings/api>) and every scan enriches the new titles: official
+Set `TMDB_API_KEY` to your free **API Read Access Token** (the long `eyJ…` token from
+<https://www.themoviedb.org/settings/api>; the short v3 key is not accepted) and every scan
+enriches the new titles: official
 title, synopsis, genres, release date, runtime, rating, top cast, poster and backdrop. The
 images are cached under `ARTWORK_DIR` (default `data/artwork`) and served by
 `GET /artwork/<file>`, so the browser never contacts TMDB. Only a title, a year or the

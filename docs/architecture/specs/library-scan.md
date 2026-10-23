@@ -64,8 +64,10 @@ The owner calls `POST /libraries/:id/scan`.
 6. System parses the relative path into a `ParsedName` (film: title + year; episode:
    series title, season, number) with the pure name parser (ADR-0002).
 7. System upserts the `Media` row keyed by `(libraryId, filePath)` and replaces its
-   `StreamInfo` rows; an episode is attached to a `series` `Media` (title + year)
-   created on demand.
+   `StreamInfo` rows; an episode is attached to a `series` `Media` found by parsed title
+   + year (`parsedTitle`, written by the scan only, so a series renamed by UC2 keeps
+   collecting its episodes) and created on demand; a provider tag parsed from the new
+   episode that differs from the series row's replaces it and queues the series for UC2.
 8. After the walk, System deletes the `Media` rows of this library whose real path was
    not seen, then the `series` rows no episode points to.
 9. «include» UC2 ([tmdb-metadata.md](tmdb-metadata.md)) on the rows left without
