@@ -101,6 +101,12 @@ describe('byGenreRows', () => {
     ]);
     expect(byGenreRows([film]).map((row) => row.key)).toEqual(['genre-28', 'genre-18']);
   });
+
+  it('keeps documentary-only titles reachable as other titles', () => {
+    expect(byGenreRows([docFilm])).toEqual([
+      { key: 'no-genre', title: 'Other titles', items: [docFilm] },
+    ]);
+  });
 });
 
 describe('homeRows', () => {

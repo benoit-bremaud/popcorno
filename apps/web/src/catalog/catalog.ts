@@ -100,9 +100,12 @@ export function genreRows(items: readonly Media[]): Row[] {
   }));
 }
 
-/** "By genre" view of a type: genre rows, then the titles without any genre yet (not enriched). */
+/** "By genre" view of a type: genre rows, then the titles with no displayable genre. */
 export function byGenreRows(items: readonly Media[]): Row[] {
-  const untagged = items.filter((item) => (item.metadata?.genres.length ?? 0) === 0);
+  // Genre 99 never gets a row (it is a type): a documentary-only title counts as untagged.
+  const untagged = items.filter(
+    (item) => !(item.metadata?.genres ?? []).some((genre) => genre.id !== DOCUMENTARY_GENRE_ID),
+  );
   const rows = genreRows(items);
   return untagged.length === 0
     ? rows

@@ -484,6 +484,10 @@
     transition: none;
   }
 
+  .detail[open] {
+    animation-name: fade;
+  }
+
   .poster:hover,
   .poster:focus-visible,
   .poster:active,
