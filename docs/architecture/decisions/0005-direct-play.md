@@ -67,3 +67,9 @@ error code `media_not_found`. The web adds a Play button in `DetailDialog` and a
 - Container from the extension is a heuristic: a misnamed file is caught by extension 3a
   (media `error`) at play time.
 - `canPlayType("maybe")` is accepted: Firefox answers `maybe` for most valid MP4 strings.
+- No `<track>` on the player yet: subtitles are not served, and an empty track would offer
+  a captions entry that does nothing. SonarQube S4084 is accepted on `PlayerDialog.tsx`
+  (owner decision, 2026-10-23, MCDA 380/500 vs 355 for an empty track); real WebVTT
+  subtitles are tracked in a follow-up issue.
+- The path guard (3 × `realpath`, `open`, `fstat`) runs on every range request on purpose
+  (owner decision, 2026-10-23, MCDA 450/500): no cache until a slowdown is measured.

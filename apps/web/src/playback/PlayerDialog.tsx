@@ -42,10 +42,7 @@ export function PlayerDialog({ item, onClose }: Props): React.JSX.Element {
           controls
           autoPlay
           onError={() => setFailed(true)}
-        >
-          {/* Subtitle tracks are not served yet; the empty track keeps the captions menu. */}
-          <track kind="captions" />
-        </video>
+        />
       )}
     </dialog>
   );
