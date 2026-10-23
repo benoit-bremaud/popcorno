@@ -1,26 +1,15 @@
-import { useEffect, useState } from 'react';
-import type { HealthResponse } from '@popcorno/shared';
+import { CatalogPage } from './catalog/CatalogPage.js';
 
-type ServerState = { kind: 'loading' } | { kind: 'up'; version: string } | { kind: 'down' };
-
+/** The web player shell: brand header and the catalog. */
 export function App(): React.JSX.Element {
-  const [server, setServer] = useState<ServerState>({ kind: 'loading' });
-
-  useEffect(() => {
-    fetch('/api/health')
-      .then((response) => response.json() as Promise<HealthResponse>)
-      .then((health) => setServer({ kind: 'up', version: health.version }))
-      .catch(() => setServer({ kind: 'down' }));
-  }, []);
-
   return (
-    <main className="shell">
-      <h1>Popcorno</h1>
-      <p className="muted">
-        {server.kind === 'loading' && 'Checking the server…'}
-        {server.kind === 'up' && `Server up — v${server.version}`}
-        {server.kind === 'down' && 'Server unreachable'}
-      </p>
-    </main>
+    <>
+      <header className="header">
+        <h1 className="brand">Popcorno</h1>
+      </header>
+      <main className="shell">
+        <CatalogPage />
+      </main>
+    </>
   );
 }

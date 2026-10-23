@@ -19,6 +19,7 @@ media/
 .scannerwork/
 playwright-report/
 test-results/
+.playwright-mcp/
 
 # Editors / OS
 .vscode/
