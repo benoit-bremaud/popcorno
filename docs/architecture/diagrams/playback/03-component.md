@@ -28,7 +28,10 @@ flowchart LR
     end
     Scan[Library scanner]
     Parser[Name parser + path guard]
+    MetaSvc[Metadata service]
+    Match[Matcher + mapper]
     Meta[TMDB client]
+    Art[Artwork cache]
     Trans[FFmpeg runner]
     Probe[ffprobe runner]
     Repo[SQLite repositories]
@@ -39,7 +42,13 @@ flowchart LR
     Scan --> Parser
     Scan --> Probe
     Scan --> Repo
-    Meta --> Repo
+    Routes --> MetaSvc
+    MetaSvc --> Match
+    MetaSvc --> Meta
+    MetaSvc --> Art
+    MetaSvc --> Repo
+    Art --> Meta
+    Match --> Entities
     Decider --> Entities
     Parser --> Entities
     Repo --> Entities
@@ -48,6 +57,7 @@ flowchart LR
   Routes --> Contracts
   UI -->|"HTTP"| Routes
   Meta -->|"HTTPS"| TMDB[("TMDB")]
+  Art --> Disk[("data/artwork")]
   Trans -->|"child process"| FFmpeg[["ffmpeg"]]
   Probe -->|"child process"| FFprobe[["ffprobe"]]
   Repo --> DB[("SQLite")]
@@ -60,5 +70,10 @@ flowchart LR
   provider).
 - The two runners are the only egress to the process API; nothing else spawns processes.
   The scanner receives the `ffprobe runner` as a function (`Prober`) so tests inject a
-  fake. `Name parser + path guard` are pure (no fs, no process). The TMDB client (#4)
-  enriches rows the scanner stored; the scanner does not call it.
+  fake. `Name parser + path guard` are pure (no fs, no process).
+- Metadata (#4, ADR-0003): the `TMDB client` is the single HTTP egress, injected into
+  the `Metadata service` as an interface (tests pass a fake; the real one receives
+  `fetch`). `Matcher + mapper` are pure. The `Artwork cache` is the only writer under
+  `data/artwork` and downloads through the client. The scanner never calls TMDB: the
+  scan route composes `scan` then `enrich` (UC1's «include»), so a TMDB failure cannot
+  fail a scan.

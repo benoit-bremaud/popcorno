@@ -68,7 +68,10 @@ The owner calls `POST /libraries/:id/scan`.
    created on demand.
 8. After the walk, System deletes the `Media` rows of this library whose real path was
    not seen, then the `series` rows no episode points to.
-9. System returns `200` with the scan report.
+9. «include» UC2 ([tmdb-metadata.md](tmdb-metadata.md)) on the rows left without
+   metadata, when `TMDB_API_KEY` is configured; its report becomes `metadata` in the
+   scan report (`null` when not configured). A TMDB failure never fails the scan.
+10. System returns `200` with the scan report.
 
 ## Extensions
 
