@@ -1,12 +1,13 @@
 # Sequence diagram — playback — watch a title (direct play or HLS transcode)
 
-> **Feature**: UC5 Watch a title — [use cases](01-use-case.md)
-> **Related ADRs**: ADR-0001
+> **Feature**: UC5 Watch a title — [use cases](01-use-case.md),
+> [spec HLS](../../specs/hls-transcode.md), [spec direct](../../specs/direct-play.md)
+> **Related ADRs**: ADR-0001, ADR-0005, ADR-0006
 
 ## Context
 
-The one non-trivial flow of the MVP: deciding between direct play and transcode, and
-streaming either. Resume (UC6) only changes the initial `startAt`.
+Every Play goes through `POST /playback/sessions`: the server confirms direct play with
+`directPlayMime` or starts an HLS session. Resume (UC6) will only add a start offset.
 
 ## Diagram
 
@@ -14,44 +15,70 @@ streaming either. Resume (UC6) only changes the initial `startAt`.
 sequenceDiagram
   actor V as Viewer
   participant W as Web player
-  participant API as Server API
-  participant PD as PlaybackDecider
-  participant FF as FFmpeg
-  participant FS as Media files
+  participant API as Session routes
+  participant SM as SessionManager
+  participant TR as Transcoder
+  participant FF as FFmpeg (child process)
+  participant FS as Session temp dir
 
-  V->>W: Press play on a title
-  W->>API: POST /playback/sessions {mediaId, profileId, capabilities}
-  API->>PD: decide(media.streams, capabilities)
-  alt Browser can read container + codecs
-    PD-->>API: DirectPlay
-    API-->>W: 201 {mode: direct, url: /media/:id/file}
-    W->>API: GET /media/:id/file (Range)
-    API->>FS: read range
-    FS-->>API: bytes
-    API-->>W: 206 Partial Content
-  else Needs transcode
-    PD-->>API: Transcode(profile)
-    API->>FF: spawn ffmpeg -i file … -f hls
-    API-->>W: 201 {mode: hls, url: /playback/:session/index.m3u8}
-    loop Every few seconds
-      W->>API: GET segment-N.ts
-      API-->>W: 200 segment
+  V->>W: Press Play
+  W->>W: decidePlayback(media, canPlayType)
+  W->>API: POST /playback/sessions {mediaId, directPlay}
+  API->>API: find media + path guard
+  alt directPlay and directPlayMime(media) ≠ null
+    API-->>W: 200 {mode: direct, url: /media/:id/file}
+    W->>API: GET /media/:id/file (Range) — #7 flow
+  else HLS
+    API->>SM: open(media)
+    alt TRANSCODE_MAX_SESSIONS reached
+      SM-->>API: busy
+      API-->>W: 503 transcode_busy
+    else slot free
+      SM->>FS: mkdtemp
+      SM->>TR: start(ffmpegArgs(media, dir))
+      TR->>FF: spawn (no shell, -i path)
+      FF->>FS: index.m3u8, segment-00000.ts …
+      SM->>FS: wait for index.m3u8 (≤ 20 s)
+      alt playlist written
+        SM-->>API: session
+        API-->>W: 201 {mode: hls, sessionId, url}
+        W->>W: import('hls.js'), attach to <video>
+        loop while playing
+          W->>API: GET /playback/sessions/:id/index.m3u8 | segment-NNNNN.ts
+          API->>SM: touch(id) (idle timer reset)
+          API->>FS: read file
+          API-->>W: 200
+        end
+        loop every 20 s while the player is open
+          W->>API: POST /playback/sessions/:id/heartbeat
+          API->>SM: touch(id)
+          API-->>W: 204
+        end
+      else ffmpeg exited / timeout
+        SM->>FF: kill
+        SM->>FS: rm -r
+        API-->>W: 502 transcode_failed
+      end
     end
   end
-  loop Every 10 s while playing
-    W->>API: PUT /profiles/:id/progress {mediaId, positionSec}
-    API-->>W: 204
+  alt Viewer closes the player
+    W->>API: DELETE /playback/sessions/:id
+    API->>SM: close(id)
+  else 60 s without any request
+    SM->>SM: watchdog fires close(id)
   end
-  V->>W: Close the player
-  W->>API: DELETE /playback/sessions/:session
-  API->>FF: kill
+  SM->>FF: kill (SIGKILL)
+  SM->>FS: rm -r
 ```
 
 ## Notes
 
-- `PlaybackDecider` is pure domain code: streams + capabilities in, decision out. It is
-  the first unit-test target.
-- The Range path never touches FFmpeg; the HLS path never touches Range.
-- Session deletion kills the FFmpeg child; a watchdog also kills sessions idle > 60 s.
-- Path safety: `/media/:id/file` resolves the id to a path stored at scan time, never a
-  client-supplied path.
+- `ffmpegArgs` is pure; `Transcoder` is the only child-process egress of the playback
+  domain and gets `spawn` injected (tests never run FFmpeg).
+- Playlist and segment routes never build a path from the URL without validating the
+  name (`index.m3u8` or `segment-\d{5}.ts`) and joining it to the session's own dir.
+- Direct play keeps the #7 Range route untouched.
+</content>
+</invoke>
+<invoke name="Bash">
+<parameter name="command">cd docs/architecture && grep -n "Session\|sessions\|watchdog\|Transcod" diagrams/playback/03-component.md diagrams/playback/04-class.md | head -30; grep -n -i "transcode\|not playable" ../requirements/*.md specs/direct-play.md | head
