@@ -137,7 +137,11 @@ reaches the end of its walk with the key configured.
 - `POST /libraries/:id/enrich` is synchronous: the response comes after the last title
   (a few minutes for a 500-title first run); a run in flight answers `409` meanwhile.
 - `GET /artwork/:file` answers `Cache-Control: public, max-age=31536000, immutable`: a
-  digest-named file never changes content, so the browser may keep it for a year.
+  digest-named file never changes content, so the browser may keep it for a year. The
+  file is handed out by `@fastify/static` (`root: ARTWORK_DIR`, `serve: false`, so only
+  the digest-validated route reaches the disk) rather than a hand-rolled stream: content
+  type, length and range handling come from the plugin (CodeQL `js/missing-rate-limiting`
+  flags any hand-rolled file-system read).
 - `unknown` rows (UC1 extension 6a) are searched as films in a films library and as
   series in a series library, with no year: this is the recovery path ADR-0002 promised.
 - Documentaries: genre id 99 (`Documentary`, both movie and TV lists). The catalog

@@ -1,6 +1,4 @@
-import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
-import { extname, join } from 'node:path';
+import fastifyStatic from '@fastify/static';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { EnrichReport } from '@popcorno/shared';
@@ -14,22 +12,19 @@ import type { MetadataService } from './service.js';
 export interface MetadataRoutesDeps {
   readonly repository: LibraryRepository;
   readonly service: MetadataService | null;
-  /** Folder the artwork cache writes to; the only folder `GET /artwork/:file` reads. */
+  /** Absolute folder the artwork cache writes to; the only folder `GET /artwork/:file` reads. */
   readonly artworkDir: string;
 }
 
 const enrichBody = z.object({ refresh: z.boolean().optional() }).strict();
 const artworkParams = z.object({ file: z.string().regex(ARTWORK_FILE) });
-const CONTENT_TYPES: Readonly<Record<string, string>> = {
-  '.jpg': 'image/jpeg',
-  '.png': 'image/png',
-};
 
 /**
  * `POST /libraries/:id/enrich` (200 | 400 `invalid_request` | 404 `library_not_found` |
  * 409 `tmdb_not_configured` / `enrich_running`) — synchronous, the response comes after
  * the last title — and `GET /artwork/:file` (200 | 400 | 404 `artwork_not_found`), served
- * immutable for a year since a digest-named file never changes content.
+ * by `@fastify/static` from `artworkDir` only, immutable for a year since a digest-named
+ * file never changes content.
  */
 export function registerMetadataRoutes(app: FastifyInstance, deps: MetadataRoutesDeps): void {
   app.post('/libraries/:id/enrich', async (request, reply) => {
@@ -48,18 +43,25 @@ export function registerMetadataRoutes(app: FastifyInstance, deps: MetadataRoute
     }
   });
 
-  app.get('/artwork/:file', async (request, reply) => {
-    const params = artworkParams.safeParse(request.params);
-    if (!params.success) return reply.code(400).send(invalid(params.error.issues));
-    // The regex only admits `<64 hex>.jpg|png`, so the join cannot leave the folder.
-    const path = join(deps.artworkDir, params.data.file);
-    const info = await stat(path).catch(() => null);
-    if (!info?.isFile()) return reply.code(404).send(apiError('artwork_not_found'));
-    return reply
-      .code(200)
-      .header('Content-Type', CONTENT_TYPES[extname(path)] ?? 'application/octet-stream')
-      .header('Content-Length', info.size)
-      .header('Cache-Control', 'public, max-age=31536000, immutable')
-      .send(createReadStream(path));
-  });
+  // Own prefix so the plugin's "file not found" lands on this handler, not the global one.
+  app.register(
+    async (scope) => {
+      await scope.register(fastifyStatic, {
+        root: deps.artworkDir,
+        serve: false, // Only the validated route below may hand out a file.
+        maxAge: '1y',
+        immutable: true,
+      });
+      scope.setNotFoundHandler(async (_request, reply) =>
+        reply.code(404).send(apiError('artwork_not_found')),
+      );
+      scope.get('/:file', async (request, reply) => {
+        const params = artworkParams.safeParse(request.params);
+        if (!params.success) return reply.code(400).send(invalid(params.error.issues));
+        // The regex only admits `<64 hex>.jpg|png`, so the name cannot leave the folder.
+        return reply.sendFile(params.data.file);
+      });
+    },
+    { prefix: '/artwork' },
+  );
 }
