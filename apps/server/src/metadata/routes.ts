@@ -3,15 +3,18 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { EnrichReport } from '@popcorno/shared';
 import { apiError, invalid, loadLibrary } from '../http.js';
+import { LibraryBusyError } from '../library/lock.js';
+import type { LibraryLock } from '../library/lock.js';
 import type { LibraryRepository } from '../library/repository.js';
 import { ARTWORK_FILE } from './artwork-cache.js';
-import { EnrichRunningError } from './service.js';
 import type { MetadataService } from './service.js';
 
 /** What the metadata routes need; `service` is null when `TMDB_API_KEY` is not configured. */
 export interface MetadataRoutesDeps {
   readonly repository: LibraryRepository;
   readonly service: MetadataService | null;
+  /** Shared with the library routes: an enrich never overlaps a scan or another enrich. */
+  readonly lock: LibraryLock;
   /** Absolute folder the artwork cache writes to; the only folder `GET /artwork/:file` reads. */
   readonly artworkDir: string;
 }
@@ -21,8 +24,8 @@ const artworkParams = z.object({ file: z.string().regex(ARTWORK_FILE) });
 
 /**
  * `POST /libraries/:id/enrich` (200 | 400 `invalid_request` | 404 `library_not_found` |
- * 409 `tmdb_not_configured` / `enrich_running`) — synchronous, the response comes after
- * the last title — and `GET /artwork/:file` (200 | 400 | 404 `artwork_not_found`), served
+ * 409 `tmdb_not_configured` / `enrich_running` — a scan or an enrichment of the library is
+ * in flight) — synchronous, the response comes after the last title — and `GET /artwork/:file` (200 | 400 | 404 `artwork_not_found`), served
  * by `@fastify/static` from `artworkDir` only, immutable for a year since a digest-named
  * file never changes content.
  */
@@ -32,12 +35,15 @@ export function registerMetadataRoutes(app: FastifyInstance, deps: MetadataRoute
     if (!library.ok) return reply.code(library.status).send(library.body);
     const body = enrichBody.safeParse(request.body ?? {});
     if (!body.success) return reply.code(400).send(invalid(body.error.issues));
-    if (!deps.service) return reply.code(409).send(apiError('tmdb_not_configured'));
+    const service = deps.service;
+    if (!service) return reply.code(409).send(apiError('tmdb_not_configured'));
     try {
-      const report: EnrichReport = await deps.service.enrich(library.value, body.data);
+      const report: EnrichReport = await deps.lock.run(library.value.id, () =>
+        service.enrich(library.value, body.data),
+      );
       return reply.code(200).send(report);
     } catch (error) {
-      if (error instanceof EnrichRunningError)
+      if (error instanceof LibraryBusyError)
         return reply.code(409).send(apiError('enrich_running'));
       throw error;
     }

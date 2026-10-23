@@ -171,6 +171,10 @@ goes out as the `language` query parameter and carries no personal data.
   `loadConfig`, passed to the client factory, never logged (the error handler already
   hides messages; the key only travels in the `Authorization` header and a
   `TmdbRequestError` carries the path and status only).
+- One `LibraryLock` per library, held by the scan route across the walk and the included
+  enrichment and by the enrich route: without it an enrichment in flight could save a
+  match for a file a concurrent scan had just re-parsed (the scanner and the service
+  carry no guard of their own; the exclusion lives where concurrent requests arrive).
 - Replacing `title` by TMDB's would break UC1's series grouping (episodes are attached by
   title + year), so migration `0002_parsed-title` adds `parsed_title`, written by the scan
   only and back-filled from `title`; `findOrCreateSeries` matches on it.

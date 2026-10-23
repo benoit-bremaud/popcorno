@@ -114,7 +114,10 @@ The owner calls `POST /libraries/:id/scan`.
   probing and parsing are skipped, the row counts as neither added nor updated. A renamed
   link to the same file changes the relative path, so its title / year are re-parsed.
   Continue at 3.
-- **\*a. A scan of the same library is already running** → `409 { error: 'scan_running' }`.
+- **\*a. A scan or an enrichment (UC2) of the same library is already running** →
+  `409 { error: 'scan_running' }`. One lock per library covers the walk *and* its
+  included enrichment, so an enrichment in flight can never save a match for a file this
+  scan has just re-parsed.
 
 ## Technology and data variations
 

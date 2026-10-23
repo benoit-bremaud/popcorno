@@ -4,15 +4,19 @@ import { z } from 'zod';
 import { LIBRARY_KINDS } from '@popcorno/shared';
 import type { EnrichReport, Library, Media, ScanReport } from '@popcorno/shared';
 import { apiError, invalid, loadLibrary } from '../http.js';
+import { LibraryBusyError } from './lock.js';
+import type { LibraryLock } from './lock.js';
 import { resolveUnderRoot } from './path-guard.js';
 import type { LibraryRepository } from './repository.js';
-import { RootUnreadableError, ScanRunningError } from './scanner.js';
+import { RootUnreadableError } from './scanner.js';
 import type { LibraryScanner } from './scanner.js';
 
 /** What the library routes need; built by `buildApp`, replaced by tests at will. */
 export interface LibraryRoutesDeps {
   readonly repository: LibraryRepository;
   readonly scanner: LibraryScanner;
+  /** Shared with the metadata routes: a scan (plus its include) and an enrich never overlap. */
+  readonly lock: LibraryLock;
   /** Absolute folder every `rootPath` must equal or live under (`ServerConfig.mediaRoot`). */
   readonly mediaRoot: string;
   /**
@@ -25,7 +29,8 @@ export interface LibraryRoutesDeps {
 /**
  * `POST /libraries` (201 | 400 `invalid_request`), `GET /libraries`,
  * `POST /libraries/:id/scan` (200 | 400 | 404 `library_not_found` | 409 `root_unreadable` /
- * `scan_running`), `GET /libraries/:id/media` (200 | 400 | 404).
+ * `scan_running` — a scan *or an enrichment* of the library is in flight),
+ * `GET /libraries/:id/media` (200 | 400 | 404).
  */
 export function registerLibraryRoutes(app: FastifyInstance, deps: LibraryRoutesDeps): void {
   const createLibraryBody = z.object({
@@ -53,14 +58,17 @@ export function registerLibraryRoutes(app: FastifyInstance, deps: LibraryRoutesD
     const library = loadLibrary(request.params, deps.repository);
     if (!library.ok) return reply.code(library.status).send(library.body);
     try {
-      const scanned = await deps.scanner.scan(library.value);
-      const metadata = await includeEnrich(deps.enrich, library.value, request.log);
-      const report: ScanReport = { ...scanned, metadata };
+      // The lock spans the include too: the enrichment must see the rows this scan wrote.
+      const report: ScanReport = await deps.lock.run(library.value.id, async () => {
+        const scanned = await deps.scanner.scan(library.value);
+        const metadata = await includeEnrich(deps.enrich, library.value, request.log);
+        return { ...scanned, metadata };
+      });
       return reply.code(200).send(report);
     } catch (error) {
       if (error instanceof RootUnreadableError)
         return reply.code(409).send(apiError('root_unreadable'));
-      if (error instanceof ScanRunningError) return reply.code(409).send(apiError('scan_running'));
+      if (error instanceof LibraryBusyError) return reply.code(409).send(apiError('scan_running'));
       throw error;
     }
   });

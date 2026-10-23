@@ -7,14 +7,6 @@ import type { EpisodeRow, MetadataRepository, PendingTitle } from './repository.
 import { TmdbRequestError } from './tmdb-client.js';
 import type { TmdbClient, TmdbEpisode, TmdbKind } from './tmdb-client.js';
 
-/** Thrown when an enrichment of the same library is already in flight (spec extension 2b). */
-export class EnrichRunningError extends Error {
-  constructor(libraryId: string) {
-    super(`An enrichment of library ${libraryId} is already running`);
-    this.name = 'EnrichRunningError';
-  }
-}
-
 /** Options of one run; `refresh` re-fetches every title (default false). */
 export interface EnrichOptions {
   readonly refresh?: boolean;
@@ -57,7 +49,6 @@ const TMDB_ID = /^\d{1,12}$/;
 
 /** UC2 — one title at a time (sequence diagram 02-sequence-enrich-metadata). */
 export class MetadataService {
-  private readonly running = new Set<string>();
   private readonly repository: MetadataRepository;
   private readonly client: TmdbClient;
   private readonly artwork: ArtworkCache;
@@ -74,20 +65,11 @@ export class MetadataService {
 
   /**
    * Looks up every pending title of the library and returns the report. Per-title
-   * failures are reported and logged, never thrown.
-   * @throws {EnrichRunningError} when a run on the same library is in flight.
+   * failures are reported and logged, never thrown. Not guarded against a concurrent
+   * run: the routes hold the `LibraryLock` (spec 2b), shared with the scan.
    */
   async enrich(library: Library, options: EnrichOptions = {}): Promise<EnrichReport> {
-    if (this.running.has(library.id)) throw new EnrichRunningError(library.id);
-    this.running.add(library.id);
-    try {
-      return await this.run(library, options.refresh ?? false);
-    } finally {
-      this.running.delete(library.id);
-    }
-  }
-
-  private async run(library: Library, refresh: boolean): Promise<EnrichReport> {
+    const refresh = options.refresh ?? false;
     const kind: TmdbKind = library.kind === 'films' ? 'movie' : 'tv';
     const skipped = refresh ? 0 : this.repository.countLookedUp(library.id);
     const pending = this.repository.listPending(library.id, refresh);

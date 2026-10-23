@@ -4,6 +4,7 @@ import type { ApiError, HealthResponse } from '@popcorno/shared';
 import type { AppDatabase } from './db/index.js';
 import type { Prober } from './library/ffprobe.js';
 import { LibraryRepository } from './library/repository.js';
+import { LibraryLock } from './library/lock.js';
 import { registerLibraryRoutes } from './library/routes.js';
 import { LibraryScanner } from './library/scanner.js';
 import { ArtworkCache } from './metadata/artwork-cache.js';
@@ -45,6 +46,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
   }));
 
   const repository = new LibraryRepository(options.db);
+  const lock = new LibraryLock();
   const scanner = new LibraryScanner(repository, options.probe, options.mediaRoot);
   const metadata = options.tmdb
     ? new MetadataService({
@@ -57,10 +59,16 @@ export function buildApp(options: AppOptions): FastifyInstance {
   registerLibraryRoutes(app, {
     repository,
     scanner,
+    lock,
     mediaRoot: options.mediaRoot,
     enrich: metadata ? (library) => metadata.enrich(library) : null,
   });
-  registerMetadataRoutes(app, { repository, service: metadata, artworkDir: options.artworkDir });
+  registerMetadataRoutes(app, {
+    repository,
+    service: metadata,
+    lock,
+    artworkDir: options.artworkDir,
+  });
 
   return app;
 }

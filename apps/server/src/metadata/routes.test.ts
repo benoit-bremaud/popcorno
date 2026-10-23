@@ -205,14 +205,17 @@ describe('metadata routes', () => {
     expect(concurrent.json<ApiError>().error).toBe('enrich_running');
   });
 
-  it('scans with metadata null when the include finds an enrichment already running', async () => {
+  it('answers 409 scan_running to a scan while an enrichment is in flight', async () => {
     const library = await createLibrary();
     await writeFile(join(root, 'The Matrix (1999).mkv'), 'x');
     await app.inject({ method: 'POST', url: `/libraries/${library.id}/scan` });
     const blocked = deferred<readonly { id: number; year: number }[]>();
-    vi.mocked(tmdb.search).mockImplementation(() => blocked.promise);
+    vi.mocked(tmdb.search)
+      .mockClear()
+      .mockImplementation(() => blocked.promise);
 
-    // The explicit refresh holds the lock; the scan's include is refused and the scan still 200s.
+    // The explicit refresh holds the shared lock: a scan could re-parse a file the
+    // enrichment is about to save, so it is refused rather than interleaved.
     const refresh = app.inject({
       method: 'POST',
       url: `/libraries/${library.id}/enrich`,
@@ -223,8 +226,31 @@ describe('metadata routes', () => {
     blocked.resolve([{ id: 603, year: 1999 }]);
     await refresh;
 
-    expect(scan.statusCode).toBe(200);
-    expect(scan.json<ScanReport>().metadata).toBeNull();
+    expect(scan.statusCode).toBe(409);
+    expect(scan.json<ApiError>().error).toBe('scan_running');
+  });
+
+  it('answers 409 enrich_running to a second enrichment while one is in flight', async () => {
+    const library = await createLibrary();
+    await writeFile(join(root, 'The Matrix (1999).mkv'), 'x');
+    await app.inject({ method: 'POST', url: `/libraries/${library.id}/scan` });
+    const blocked = deferred<readonly { id: number; year: number }[]>();
+    vi.mocked(tmdb.search)
+      .mockClear()
+      .mockImplementation(() => blocked.promise);
+
+    const refresh = app.inject({
+      method: 'POST',
+      url: `/libraries/${library.id}/enrich`,
+      payload: { refresh: true },
+    });
+    await vi.waitFor(() => expect(tmdb.search).toHaveBeenCalled());
+    const second = await app.inject({ method: 'POST', url: `/libraries/${library.id}/enrich` });
+    blocked.resolve([{ id: 603, year: 1999 }]);
+
+    expect(second.statusCode).toBe(409);
+    expect(second.json<ApiError>().error).toBe('enrich_running');
+    expect((await refresh).statusCode).toBe(200);
   });
 
   describe('without a TMDB key', () => {

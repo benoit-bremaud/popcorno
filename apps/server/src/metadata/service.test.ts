@@ -9,7 +9,7 @@ import { LibraryRepository } from '../library/repository.js';
 import type { MediaInput } from '../library/repository.js';
 import { ArtworkCache } from './artwork-cache.js';
 import { MetadataRepository } from './repository.js';
-import { EnrichRunningError, MetadataService } from './service.js';
+import { MetadataService } from './service.js';
 import { TmdbRequestError } from './tmdb-client.js';
 import type { TmdbClient, TmdbEpisode, TmdbTitleDetails } from './tmdb-client.js';
 
@@ -59,15 +59,6 @@ function makeClient(overrides: Partial<TmdbClient> = {}) {
     image: vi.fn<TmdbClient['image']>(async () => new Uint8Array([1])),
     ...overrides,
   };
-}
-
-/** A promise the test resolves by hand, to hold a TMDB call open. */
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-  let resolve: (value: T) => void = () => {};
-  const promise = new Promise<T>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
 }
 
 describe('MetadataService', () => {
@@ -396,22 +387,6 @@ describe('MetadataService', () => {
     expect(logger.warn).toHaveBeenCalledWith(expect.any(Error), expect.stringContaining('w500'));
   });
 
-  it('refuses a second run on the same library while one is in flight', async () => {
-    addFilm('Interstellar', 2014);
-    const blocked = deferred<readonly { id: number; year: number }[]>();
-    const search = vi.fn<TmdbClient['search']>(() => blocked.promise);
-    const service = makeService(makeClient({ search }));
-
-    const first = service.enrich(library);
-    await vi.waitFor(() => expect(search).toHaveBeenCalled());
-    const concurrent = service.enrich(library);
-    blocked.resolve([{ id: 1, year: 2014 }]);
-
-    await expect(concurrent).rejects.toBeInstanceOf(EnrichRunningError);
-    await first;
-    await expect(service.enrich(library)).resolves.toBeDefined();
-  });
-
   it('enriches a series and its episodes with one season request per season', async () => {
     const series = libraries.createLibrary({ name: 'Series', rootPath: '/s', kind: 'series' });
     const seriesId = libraries.findOrCreateSeries(series.id, 'Dark', 2017, {});
@@ -517,5 +492,20 @@ describe('MetadataService', () => {
     expect(report).toEqual({ matched: 1, unmatched: [], failed: [], skipped: 1 });
     expect(libraries.listMedia(series.id).find((row) => row.id === e2)?.title).toBe('Lies');
     expect(afterwards).toEqual({ matched: 0, unmatched: [], failed: [], skipped: 1 });
+  });
+
+  it('does not re-ask an unmatched series although its episodes were never looked up', async () => {
+    const series = libraries.createLibrary({ name: 'Series', rootPath: '/s', kind: 'series' });
+    const seriesId = libraries.findOrCreateSeries(series.id, 'Nobody Knows', null, {});
+    addEpisode(series, seriesId, 1, 1);
+    const client = makeClient({ search: vi.fn(async () => []) });
+    const service = makeService(client);
+
+    const first = await service.enrich(series);
+    const second = await service.enrich(series);
+
+    expect(first.unmatched).toEqual([{ title: 'Nobody Knows', year: null }]);
+    expect(second).toEqual({ matched: 0, unmatched: [], failed: [], skipped: 1 });
+    expect(client.search).toHaveBeenCalledTimes(1);
   });
 });

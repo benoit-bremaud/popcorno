@@ -32,8 +32,9 @@ export class MetadataRepository {
   constructor(private readonly db: AppDatabase) {}
 
   /**
-   * Titles of the library still to look up, in insertion order: never looked up, or a series
-   * with an episode never looked up (added by a later scan); every title when `refresh`.
+   * Titles of the library still to look up, in insertion order: never looked up, or a
+   * *matched* series with an episode never looked up (added by a later scan; an unmatched
+   * series stays skipped until `refresh`, spec 6a); every title when `refresh`.
    */
   listPending(libraryId: string, refresh: boolean): PendingTitle[] {
     const scope = and(eq(media.libraryId, libraryId), inArray(media.kind, TITLE_KINDS));
@@ -58,7 +59,14 @@ export class MetadataRepository {
         providerIds: media.providerIds,
       })
       .from(media)
-      .where(refresh ? scope : and(scope, or(isNull(media.metadataFetchedAt), hasPendingEpisode)))
+      .where(
+        refresh
+          ? scope
+          : and(
+              scope,
+              or(isNull(media.metadataFetchedAt), and(isNotNull(media.tmdbId), hasPendingEpisode)),
+            ),
+      )
       .all();
   }
 

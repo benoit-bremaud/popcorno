@@ -33,7 +33,7 @@ Owner.
 - A library exists with scanned `media` rows (UC1).
 - `TMDB_API_KEY` is set; otherwise UC2 answers `409 tmdb_not_configured` and UC1 skips
   its include (`metadata: null` in the scan report — also null when the include itself
-  could not run, e.g. a run was already in flight; the cause is logged).
+  failed before its first title, e.g. a database error; the cause is logged).
 
 ## Minimal guarantees
 
@@ -98,7 +98,8 @@ reaches the end of its walk with the key configured.
 - **1a. Malformed id** → `400 invalid_request`. **1b. Unknown library** → `404 library_not_found`.
 - **1c. Body invalid** (`refresh` not a boolean) → `400 invalid_request`.
 - **2a. No key configured** → `409 { error: 'tmdb_not_configured' }`; use case ends.
-- **2b. A run on the same library is in flight** → `409 { error: 'enrich_running' }`.
+- **2b. A scan (UC1) or a run on the same library is in flight** →
+  `409 { error: 'enrich_running' }` (one lock per library, shared with UC1).
 - **2c. Nothing pending** → `200` with zeros (`skipped` = rows left untouched).
 - **4a. The search returns nothing with the year** → retried once without the year; the
   matcher then requires the year to be within ±1 of the parsed one, else the title is

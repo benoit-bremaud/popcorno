@@ -9,7 +9,7 @@ import type { MetadataInput } from '../metadata/matcher.js';
 import { MetadataRepository } from '../metadata/repository.js';
 import type { ProbeResult, Prober } from './ffprobe.js';
 import { LibraryRepository } from './repository.js';
-import { LibraryScanner, RootUnreadableError, ScanRunningError } from './scanner.js';
+import { LibraryScanner, RootUnreadableError } from './scanner.js';
 
 const PROBED: ProbeResult = {
   durationSec: 120,
@@ -372,25 +372,5 @@ describe('LibraryScanner', () => {
 
     await expect(scanner.scan(missing)).rejects.toBeInstanceOf(RootUnreadableError);
     await expect(scanner.scan(file)).rejects.toBeInstanceOf(RootUnreadableError);
-  });
-
-  it('refuses a concurrent scan of the same library', async () => {
-    await touch(root, 'A (2000).mkv');
-    let release: () => void = () => undefined;
-    probe.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          release = () => resolve({ durationSec: 1, streams: [] });
-        }),
-    );
-
-    const first = scanner.scan(library);
-    // The probe is reached only after real fs calls; wait for it so `release` is wired.
-    await vi.waitFor(() => expect(probe).toHaveBeenCalledTimes(1));
-    await expect(scanner.scan(library)).rejects.toBeInstanceOf(ScanRunningError);
-
-    release();
-    await expect(first).resolves.toMatchObject({ added: 1 });
-    await expect(scanner.scan(library)).resolves.toMatchObject({ added: 0 });
   });
 });
