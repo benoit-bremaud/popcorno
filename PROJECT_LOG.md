@@ -4,7 +4,19 @@ Chronological operational logbook (newest first). Complements `git log` with the
 context: merged PRs, decisions, tags, infra events. Not a release changelog — that is
 `CHANGELOG.md`.
 
-## 2026-10-23 — #4 TMDB metadata (PR pending)
+## 2026-10-23 — #4 TMDB metadata (PR #16 merged, `dfaaa61`)
+
+- **PR review** — CodeQL raised 2 alerts and Codex 15 findings over five rounds. All were
+  fixed and answered inline; the sixth Codex round was clean. Owner MCDA decisions:
+  `@fastify/static` for the artwork route (B 430), read access token only (B 450),
+  `parsed_title` grouping key with migration 0002 (B 445), one `LibraryLock` shared by scan
+  and enrich (A 445). Other fixes: revisits keep the stored match, a single TMDB request
+  queue per server, an image cap enforced while streaming, poster / backdrop / stills
+  downloaded sequentially.
+- **Final gate (2219a4c)** — 157 tests, 98.05 % stmts, SonarQube PASSED, gitleaks clean,
+  CI 9/9. QA replayed with the TMDB double (`qa/2026-10-23-issue-4-pr-review/`). The 429
+  retry and the lock were exercised. One start-up warn was fixed by creating `ARTWORK_DIR`
+  at boot. Squash-merged with owner approval; issue #4 is Done.
 
 - **Conception gate** — Cockburn spec UC2 (`docs/architecture/specs/tmdb-metadata.md`),
   sequence diagram `02-sequence-enrich-metadata.md`, class / component / data-flow updates,
