@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
-import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { LIBRARY_KINDS, MEDIA_KINDS, STREAM_TYPES } from '@popcorno/shared';
-import type { ProviderIds } from '@popcorno/shared';
+import type { CastMember, Genre, ProviderIds } from '@popcorno/shared';
 
 /** Persistence shape of the class diagram (04-class.md); tables derive from the entities. */
 
@@ -44,6 +44,18 @@ export const media = sqliteTable(
       .default(sql`'{}'`),
     edition: text('edition'),
     part: integer('part'),
+    // UC2 metadata (ADR-0003): all nullable, `metadata_fetched_at` null = never looked up.
+    tmdbId: integer('tmdb_id'),
+    overview: text('overview'),
+    genres: text('genres', { mode: 'json' }).$type<readonly Genre[]>(),
+    releaseDate: text('release_date'),
+    runtimeMin: integer('runtime_min'),
+    voteAverage: real('vote_average'),
+    voteCount: integer('vote_count'),
+    cast: text('cast', { mode: 'json' }).$type<readonly CastMember[]>(),
+    posterPath: text('poster_path'),
+    backdropPath: text('backdrop_path'),
+    metadataFetchedAt: text('metadata_fetched_at'),
   },
   (table) => [
     uniqueIndex('media_library_file_idx').on(table.libraryId, table.filePath),

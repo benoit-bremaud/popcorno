@@ -2,13 +2,12 @@ import { isAbsolute, resolve } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { LIBRARY_KINDS } from '@popcorno/shared';
-import type { ApiError, ApiErrorCode, Library, Media, ScanReport } from '@popcorno/shared';
+import type { EnrichReport, Library, Media, ScanReport } from '@popcorno/shared';
+import { apiError, invalid, loadLibrary } from '../http.js';
 import { resolveUnderRoot } from './path-guard.js';
 import type { LibraryRepository } from './repository.js';
 import { RootUnreadableError, ScanRunningError } from './scanner.js';
 import type { LibraryScanner } from './scanner.js';
-
-const libraryParams = z.object({ id: z.uuid() });
 
 /** What the library routes need; built by `buildApp`, replaced by tests at will. */
 export interface LibraryRoutesDeps {
@@ -16,6 +15,11 @@ export interface LibraryRoutesDeps {
   readonly scanner: LibraryScanner;
   /** Absolute folder every `rootPath` must equal or live under (`ServerConfig.mediaRoot`). */
   readonly mediaRoot: string;
+  /**
+   * UC1's «include» of UC2: runs after a scan on the rows without metadata. Null when
+   * `TMDB_API_KEY` is not configured (the report then carries `metadata: null`).
+   */
+  readonly enrich: ((library: Library) => Promise<EnrichReport>) | null;
 }
 
 /**
@@ -49,7 +53,9 @@ export function registerLibraryRoutes(app: FastifyInstance, deps: LibraryRoutesD
     const library = loadLibrary(request.params, deps.repository);
     if (!library.ok) return reply.code(library.status).send(library.body);
     try {
-      const report: ScanReport = await deps.scanner.scan(library.value);
+      const scanned = await deps.scanner.scan(library.value);
+      const metadata = await includeEnrich(deps.enrich, library.value, request.log);
+      const report: ScanReport = { ...scanned, metadata };
       return reply.code(200).send(report);
     } catch (error) {
       if (error instanceof RootUnreadableError)
@@ -67,32 +73,23 @@ export function registerLibraryRoutes(app: FastifyInstance, deps: LibraryRoutesD
   });
 }
 
+/** The scan's «include» of UC2: a metadata failure is logged, never fails the scan (spec UC2 *a). */
+async function includeEnrich(
+  enrich: LibraryRoutesDeps['enrich'],
+  library: Library,
+  log: FastifyInstance['log'],
+): Promise<EnrichReport | null> {
+  if (!enrich) return null;
+  try {
+    return await enrich(library);
+  } catch (error) {
+    log.warn(error, 'metadata enrichment skipped after scan');
+    return null;
+  }
+}
+
 /** The normalised absolute path when it is the media root or under it, else null. */
 function underMediaRoot(mediaRoot: string, path: string): string | null {
   const normalised = resolve(path);
   return normalised === mediaRoot ? normalised : resolveUnderRoot(mediaRoot, normalised);
-}
-
-type Loaded =
-  | { readonly ok: true; readonly value: Library }
-  | { readonly ok: false; readonly status: 400 | 404; readonly body: ApiError };
-
-function loadLibrary(params: unknown, repository: LibraryRepository): Loaded {
-  const parsed = libraryParams.safeParse(params);
-  if (!parsed.success) return { ok: false, status: 400, body: invalid(parsed.error.issues) };
-  const library = repository.findLibrary(parsed.data.id);
-  if (!library) return { ok: false, status: 404, body: apiError('library_not_found') };
-  return { ok: true, value: library };
-}
-
-/** Only the path and message of each zod issue: enough for a client, nothing internal. */
-function invalid(issues: readonly z.core.$ZodIssue[]): ApiError {
-  return {
-    error: 'invalid_request',
-    details: issues.map(({ path, message }) => ({ path, message })),
-  };
-}
-
-function apiError(error: ApiErrorCode): ApiError {
-  return { error };
 }

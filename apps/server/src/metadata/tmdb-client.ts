@@ -1,0 +1,290 @@
+import { z } from 'zod';
+
+/**
+ * TMDB v3 client — the single HTTP egress of the server (component diagram, ADR-0003).
+ * `fetch` is injected so tests assert URLs and headers without opening a socket. Only a
+ * title, a year or a provider id ever appear in a request (data-flow 06); the key travels
+ * in the `Authorization` header and never appears in an error.
+ */
+
+/** What TMDB calls a movie or a TV series; a films library searches movies, a series library TV. */
+export type TmdbKind = 'movie' | 'tv';
+
+/** One search / find result reduced to what the matcher needs. */
+export interface TmdbCandidate {
+  readonly id: number;
+  /** Release year (movie) or first-air year (TV), null when TMDB has no date. */
+  readonly year: number | null;
+}
+
+/** A billed cast member as TMDB returns it. */
+export interface TmdbCastMember {
+  readonly name: string;
+  readonly character: string;
+  readonly profile_path: string | null;
+  readonly order: number;
+}
+
+/** Movie or TV details with credits, normalised to one shape by the response schemas. */
+export interface TmdbTitleDetails {
+  readonly id: number;
+  readonly title: string;
+  readonly overview: string;
+  readonly genres: readonly { readonly id: number; readonly name: string }[];
+  /** `release_date` or `first_air_date`, empty when unknown. */
+  readonly date: string;
+  /** `runtime` (movie) or the first `episode_run_time` (TV), null when absent. */
+  readonly runtimeMin: number | null;
+  readonly vote_average: number;
+  readonly vote_count: number;
+  readonly poster_path: string | null;
+  readonly backdrop_path: string | null;
+  readonly cast: readonly TmdbCastMember[];
+}
+
+/** One episode of a season payload. */
+export interface TmdbEpisode {
+  readonly episode_number: number;
+  readonly name: string;
+  readonly overview: string;
+  readonly still_path: string | null;
+  readonly air_date: string | null;
+  readonly runtime: number | null;
+  readonly vote_average: number;
+  readonly vote_count: number;
+}
+
+/** The six operations UC2 needs; the metadata service depends on this, tests inject a fake. */
+export interface TmdbClient {
+  /** `/search/movie` or `/search/tv`; `year` filters the release / first-air year when set. */
+  search(kind: TmdbKind, title: string, year: number | null): Promise<readonly TmdbCandidate[]>;
+  /** `/find/{imdbId}` — the movie or TV results depending on `kind`. */
+  findByImdb(kind: TmdbKind, imdbId: string): Promise<readonly TmdbCandidate[]>;
+  /** `/movie/{id}` or `/tv/{id}` with `append_to_response=credits`. */
+  details(kind: TmdbKind, id: number): Promise<TmdbTitleDetails>;
+  /** `/tv/{id}/season/{n}`. */
+  season(seriesId: number, season: number): Promise<readonly TmdbEpisode[]>;
+  /** Image bytes for a TMDB path (`/abc.jpg`) at a size (`w500`); base URL from `/configuration`. */
+  image(path: string, size: string): Promise<Uint8Array>;
+}
+
+/** Thrown when TMDB answers an error status (after the single 429 retry) or an invalid payload. */
+export class TmdbRequestError extends Error {
+  constructor(
+    readonly path: string,
+    readonly status: number,
+  ) {
+    super(`TMDB ${path} answered ${status}`);
+    this.name = 'TmdbRequestError';
+  }
+}
+
+/** What `createTmdbClient` needs; `fetch` and `delay` are the boundaries tests replace. */
+export interface TmdbClientOptions {
+  readonly apiKey: string;
+  readonly language: string;
+  readonly fetch: typeof globalThis.fetch;
+  /** Waits `ms` before the 429 retry; tests pass a no-op. */
+  readonly delay?: (ms: number) => Promise<void>;
+}
+
+const API_BASE = 'https://api.themoviedb.org/3';
+const REQUEST_TIMEOUT_MS = 15_000;
+const RETRY_AFTER_CAP_S = 10;
+/** Only TMDB-shaped image paths may become a URL (ADR-0003 § 4). */
+const IMAGE_PATH = /^\/[A-Za-z0-9]+\.(?:jpg|png)$/;
+
+const nullableString = z.string().nullable().optional();
+
+const candidateList = z.array(
+  z.object({
+    id: z.number().int(),
+    release_date: nullableString,
+    first_air_date: nullableString,
+  }),
+);
+const searchResponse = z.object({ results: candidateList });
+const findResponse = z.object({ movie_results: candidateList, tv_results: candidateList });
+
+const castList = z
+  .array(
+    z.object({
+      name: z.string(),
+      character: z.string().optional().default(''),
+      profile_path: nullableString,
+      order: z.number().int().optional().default(0),
+    }),
+  )
+  .optional()
+  .default([]);
+const genreList = z.array(z.object({ id: z.number().int(), name: z.string() })).default([]);
+const detailsCommon = {
+  id: z.number().int(),
+  overview: z.string().optional().default(''),
+  genres: genreList,
+  vote_average: z.number().optional().default(0),
+  vote_count: z.number().int().optional().default(0),
+  poster_path: nullableString,
+  backdrop_path: nullableString,
+  credits: z.object({ cast: castList }).optional(),
+};
+const movieDetails = z.object({
+  ...detailsCommon,
+  title: z.string(),
+  release_date: nullableString,
+  runtime: z.number().int().nullable().optional(),
+});
+const tvDetails = z.object({
+  ...detailsCommon,
+  name: z.string(),
+  first_air_date: nullableString,
+  episode_run_time: z.array(z.number().int()).optional().default([]),
+});
+const seasonResponse = z.object({
+  episodes: z.array(
+    z.object({
+      episode_number: z.number().int(),
+      name: z.string().optional().default(''),
+      overview: z.string().optional().default(''),
+      still_path: nullableString,
+      air_date: nullableString,
+      runtime: z.number().int().nullable().optional(),
+      vote_average: z.number().optional().default(0),
+      vote_count: z.number().int().optional().default(0),
+    }),
+  ),
+});
+const configurationResponse = z.object({
+  images: z.object({ secure_base_url: z.string().url() }),
+});
+
+type CandidateRow = z.infer<typeof candidateList>[number];
+
+function toCandidate(row: CandidateRow): TmdbCandidate {
+  const date = row.release_date ?? row.first_air_date ?? '';
+  const year = Number.parseInt(date.slice(0, 4), 10);
+  return { id: row.id, year: Number.isNaN(year) ? null : year };
+}
+
+type CastRow = z.infer<typeof castList>[number];
+
+function normaliseCast(cast: readonly CastRow[]): readonly TmdbCastMember[] {
+  return cast.map((member) => ({ ...member, profile_path: member.profile_path ?? null }));
+}
+
+/** Builds the real client over `fetch`; one instance per server, no state but the image base URL. */
+export function createTmdbClient(options: TmdbClientOptions): TmdbClient {
+  const delay = options.delay ?? ((ms) => new Promise((done) => setTimeout(done, ms)));
+  let imageBaseUrl: Promise<string> | null = null;
+
+  async function request(
+    path: string,
+    params: Record<string, string>,
+    retried = false,
+  ): Promise<unknown> {
+    const url = new URL(`${API_BASE}${path}`);
+    for (const [key, value] of Object.entries({ ...params, language: options.language })) {
+      url.searchParams.set(key, value);
+    }
+    const response = await options.fetch(url, {
+      headers: { Authorization: `Bearer ${options.apiKey}`, Accept: 'application/json' },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (response.status === 429 && !retried) {
+      const retryAfter = Number.parseInt(response.headers.get('retry-after') ?? '1', 10);
+      await delay(Math.min(Number.isNaN(retryAfter) ? 1 : retryAfter, RETRY_AFTER_CAP_S) * 1000);
+      return request(path, params, true);
+    }
+    if (!response.ok) throw new TmdbRequestError(path, response.status);
+    return response.json();
+  }
+
+  async function parsed<T>(
+    path: string,
+    params: Record<string, string>,
+    schema: z.ZodType<T>,
+  ): Promise<T> {
+    const result = schema.safeParse(await request(path, params));
+    // 200 with an unexpected shape: reported as a request failure (spec 5a), not a crash.
+    if (!result.success) throw new TmdbRequestError(path, 200);
+    return result.data;
+  }
+
+  return {
+    async search(kind, title, year) {
+      const params: Record<string, string> = { query: title, include_adult: 'false' };
+      if (year !== null) params[kind === 'movie' ? 'year' : 'first_air_date_year'] = String(year);
+      const body = await parsed(`/search/${kind}`, params, searchResponse);
+      return body.results.map(toCandidate);
+    },
+
+    async findByImdb(kind, imdbId) {
+      const body = await parsed(
+        `/find/${encodeURIComponent(imdbId)}`,
+        { external_source: 'imdb_id' },
+        findResponse,
+      );
+      return (kind === 'movie' ? body.movie_results : body.tv_results).map(toCandidate);
+    },
+
+    async details(kind, id) {
+      const params = { append_to_response: 'credits' };
+      if (kind === 'movie') {
+        const body = await parsed(`/movie/${id}`, params, movieDetails);
+        return {
+          id: body.id,
+          title: body.title,
+          overview: body.overview,
+          genres: body.genres,
+          date: body.release_date ?? '',
+          runtimeMin: body.runtime ?? null,
+          vote_average: body.vote_average,
+          vote_count: body.vote_count,
+          poster_path: body.poster_path ?? null,
+          backdrop_path: body.backdrop_path ?? null,
+          cast: normaliseCast(body.credits?.cast ?? []),
+        };
+      }
+      const body = await parsed(`/tv/${id}`, params, tvDetails);
+      return {
+        id: body.id,
+        title: body.name,
+        overview: body.overview,
+        genres: body.genres,
+        date: body.first_air_date ?? '',
+        runtimeMin: body.episode_run_time[0] ?? null,
+        vote_average: body.vote_average,
+        vote_count: body.vote_count,
+        poster_path: body.poster_path ?? null,
+        backdrop_path: body.backdrop_path ?? null,
+        cast: normaliseCast(body.credits?.cast ?? []),
+      };
+    },
+
+    async season(seriesId, season) {
+      const body = await parsed(`/tv/${seriesId}/season/${season}`, {}, seasonResponse);
+      return body.episodes.map((episode) => ({
+        ...episode,
+        still_path: episode.still_path ?? null,
+        air_date: episode.air_date ?? null,
+        runtime: episode.runtime ?? null,
+      }));
+    },
+
+    async image(path, size) {
+      if (!IMAGE_PATH.test(path)) throw new TmdbRequestError('/image', 400);
+      imageBaseUrl ??= parsed('/configuration', {}, configurationResponse).then(
+        (body) => body.images.secure_base_url,
+      );
+      const base = await imageBaseUrl.catch((error: unknown) => {
+        imageBaseUrl = null; // A failed configuration call must not poison later runs.
+        throw error;
+      });
+      const response = await options.fetch(`${base}${size}${path}`, {
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+      if (!response.ok) throw new TmdbRequestError(`/image${path}`, response.status);
+      return new Uint8Array(await response.arrayBuffer());
+    },
+  };
+}

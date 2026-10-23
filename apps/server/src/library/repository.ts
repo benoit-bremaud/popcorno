@@ -1,7 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, isNotNull, isNull, notExists, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
-import type { CreateLibraryBody, Library, Media, ProviderIds, StreamInfo } from '@popcorno/shared';
+import type {
+  CastMember,
+  CreateLibraryBody,
+  Genre,
+  Library,
+  Media,
+  MediaMetadata,
+  ProviderIds,
+  StreamInfo,
+} from '@popcorno/shared';
 import type { AppDatabase } from '../db/index.js';
 import { libraries, media, streams } from '../db/schema.js';
 import type { ParsedName } from './name-parser.js';
@@ -176,6 +185,17 @@ export class LibraryRepository {
         providerIds: media.providerIds,
         edition: media.edition,
         part: media.part,
+        tmdbId: media.tmdbId,
+        overview: media.overview,
+        genres: media.genres,
+        releaseDate: media.releaseDate,
+        runtimeMin: media.runtimeMin,
+        voteAverage: media.voteAverage,
+        voteCount: media.voteCount,
+        cast: media.cast,
+        posterPath: media.posterPath,
+        backdropPath: media.backdropPath,
+        metadataFetchedAt: media.metadataFetchedAt,
       })
       .from(media)
       .where(eq(media.libraryId, libraryId))
@@ -200,6 +220,53 @@ export class LibraryRepository {
       list.push(stream);
       streamsByMedia.set(mediaId, list);
     }
-    return rows.map((row) => ({ ...row, streams: streamsByMedia.get(row.id) ?? [] }));
+    return rows.map((row) => toMedia(row, streamsByMedia.get(row.id) ?? []));
   }
+}
+
+type MediaRow = Omit<Media, 'streams' | 'metadata'> & {
+  readonly tmdbId: number | null;
+  readonly overview: string | null;
+  readonly genres: readonly Genre[] | null;
+  readonly releaseDate: string | null;
+  readonly runtimeMin: number | null;
+  readonly voteAverage: number | null;
+  readonly voteCount: number | null;
+  readonly cast: readonly CastMember[] | null;
+  readonly posterPath: string | null;
+  readonly backdropPath: string | null;
+  readonly metadataFetchedAt: string | null;
+};
+
+/** Folds the flat metadata columns into `Media.metadata` (null until UC2 looked the row up). */
+function toMedia(row: MediaRow, mediaStreams: readonly StreamInfo[]): Media {
+  const { metadataFetchedAt, genres, cast, ...rest } = row;
+  const {
+    tmdbId,
+    overview,
+    releaseDate,
+    runtimeMin,
+    voteAverage,
+    voteCount,
+    posterPath,
+    backdropPath,
+    ...base
+  } = rest;
+  const metadata: MediaMetadata | null =
+    metadataFetchedAt === null
+      ? null
+      : {
+          tmdbId,
+          overview,
+          genres: genres ?? [],
+          releaseDate,
+          runtimeMin,
+          voteAverage,
+          voteCount,
+          cast: cast ?? [],
+          posterPath,
+          backdropPath,
+          fetchedAt: metadataFetchedAt,
+        };
+  return { ...base, streams: mediaStreams, metadata };
 }

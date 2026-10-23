@@ -1,6 +1,6 @@
 # ADR-0003 — TMDB metadata: plain `fetch` client, id-first matching, JSON on `media`
 
-- Status: proposed (awaiting owner validation, 2026-10-23)
+- Status: accepted (owner, 2026-10-23 — the five A options validated as proposed)
 - Date: 2026-10-23
 - Deciders: owner
 - Related: UC2 ([spec](../specs/tmdb-metadata.md)), ADR-0001, ADR-0002, issue #4
@@ -141,7 +141,7 @@ Points: A = 150+125+100+75+30 = 480 · B = 60+125+40+75+50 = 350 · C = 150+25+1
 Sensitivity (KISS 40, Conformance 0): A = 125+100+75+120 = 420, B = 125+40+75+200 = 440 —
 B only wins when the validated UML counts for nothing. **A.**
 
-## Decision (pending owner validation)
+## Decision
 
 1-A plain `fetch` client · 2-A id-first then title + year · 3-A columns + JSON on
 `media`, documentary derived from genre 99 · 4-A poster `w500` + backdrop `w1280` cached

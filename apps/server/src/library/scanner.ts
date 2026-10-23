@@ -2,6 +2,9 @@ import type { Dirent } from 'node:fs';
 import { readdir, realpath, stat } from 'node:fs/promises';
 import { extname, join, relative, sep } from 'node:path';
 import type { Library, ScanReport, SkipReason, SkippedFile } from '@popcorno/shared';
+
+/** What the walk produces; the scan route adds the `metadata` section (UC1's «include» of UC2). */
+export type ScanOutcome = Omit<ScanReport, 'metadata'>;
 import type { Prober } from './ffprobe.js';
 import { isExtra, parseMediaName } from './name-parser.js';
 import { resolveUnderRoot } from './path-guard.js';
@@ -59,7 +62,7 @@ export class LibraryScanner {
    *   whose target escapes the media root (spec 2b).
    * @throws {ScanRunningError} when a scan of the same library is in flight (spec *a).
    */
-  async scan(library: Library): Promise<ScanReport> {
+  async scan(library: Library): Promise<ScanOutcome> {
     if (this.running.has(library.id)) throw new ScanRunningError(library.id);
     this.running.add(library.id);
     try {
@@ -69,7 +72,7 @@ export class LibraryScanner {
     }
   }
 
-  private async run(library: Library): Promise<ScanReport> {
+  private async run(library: Library): Promise<ScanOutcome> {
     const root = await realRoot(library.rootPath, this.mediaRoot);
     const { files, unreadableDirs } = await walk(root);
     const skipped: SkippedFile[] = unreadableDirs.map((dir) => ({
