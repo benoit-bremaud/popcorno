@@ -6,7 +6,7 @@ import type { EnrichReport, Library, Media, ScanReport } from '@popcorno/shared'
 import { apiError, invalid, loadLibrary } from '../http.js';
 import { LibraryBusyError } from './lock.js';
 import type { LibraryLock } from './lock.js';
-import { resolveUnderRoot } from './path-guard.js';
+import { isAtOrUnderRoot } from './path-guard.js';
 import type { LibraryRepository } from './repository.js';
 import { RootUnreadableError } from './scanner.js';
 import type { LibraryScanner } from './scanner.js';
@@ -99,5 +99,5 @@ async function includeEnrich(
 /** The normalised absolute path when it is the media root or under it, else null. */
 function underMediaRoot(mediaRoot: string, path: string): string | null {
   const normalised = resolve(path);
-  return normalised === mediaRoot ? normalised : resolveUnderRoot(mediaRoot, normalised);
+  return isAtOrUnderRoot(mediaRoot, normalised) ? normalised : null;
 }

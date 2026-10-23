@@ -14,11 +14,12 @@ How the system is split and who depends on whom. The dependency rule holds: the 
 flowchart LR
   subgraph Web ["apps/web"]
     UI[Catalog + Player screens]
+    UI --> Contracts
     HLS[hls.js]
     UI --> HLS
   end
   subgraph Shared ["packages/shared"]
-    Contracts[API contracts]
+    Contracts[API contracts + decidePlayback]
   end
   subgraph Server ["apps/server"]
     Routes[HTTP routes]
@@ -35,6 +36,9 @@ flowchart LR
     Trans[FFmpeg runner]
     Probe[ffprobe runner]
     Repo[SQLite repositories]
+    Stream[Range file streamer]
+    Routes --> Stream
+    Stream --> Parser
     Routes --> Decider
     Routes --> Repo
     Routes --> Trans

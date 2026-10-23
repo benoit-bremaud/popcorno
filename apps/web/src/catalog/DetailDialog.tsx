@@ -1,12 +1,17 @@
-import { useEffect, useRef } from 'react';
-import type { Media } from '@popcorno/shared';
+import { useEffect, useRef, useState } from 'react';
+import { decidePlayback } from '@popcorno/shared';
+import type { CanPlay, Media } from '@popcorno/shared';
 import { artworkUrl } from '../api.js';
+import { browserCanPlay } from '../playback/can-play.js';
+import { PlayerDialog } from '../playback/PlayerDialog.js';
 import type { Season } from './catalog.js';
 
 type Props = {
   readonly item: Media;
   readonly seasons: readonly Season[];
   readonly onClose: () => void;
+  /** The browser's decoder check; injected by tests (jsdom decodes nothing). */
+  readonly canPlay?: CanPlay;
 };
 
 function facts(item: Media): string[] {
@@ -20,8 +25,28 @@ function facts(item: Media): string[] {
 }
 
 /** UC4: a modal `<dialog>` over the catalog; Escape or the close button close it. */
-export function DetailDialog({ item, seasons, onClose }: Props): React.JSX.Element {
+export function DetailDialog({
+  item,
+  seasons,
+  onClose,
+  canPlay = browserCanPlay,
+}: Props): React.JSX.Element {
   const ref = useRef<HTMLDialogElement>(null);
+  const [playing, setPlaying] = useState<Media | null>(null);
+  // The Play button that opened the player gets the focus back when it closes (spec step 6).
+  const trigger = useRef<HTMLButtonElement | null>(null);
+
+  function play(media: Media, button: HTMLButtonElement): void {
+    trigger.current = button;
+    setPlaying(media);
+  }
+
+  function stop(): void {
+    setPlaying(null);
+    trigger.current?.focus();
+  }
+
+  const playable = (media: Media): boolean => decidePlayback(media, canPlay).mode === 'direct';
 
   useEffect(() => {
     const dialog = ref.current;
@@ -38,8 +63,11 @@ export function DetailDialog({ item, seasons, onClose }: Props): React.JSX.Eleme
       className="detail"
       aria-labelledby={titleId}
       // Every close path (button, Escape) ends in the native `close` event, fired once the
-      // modal is no longer inert, so the caller can move the focus back.
-      onClose={onClose}
+      // modal is no longer inert, so the caller can move the focus back. React propagates
+      // `close` up its tree, so the nested player's own close must not end the detail too.
+      onClose={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
     >
       <div className="detail__panel">
         {backdrop !== null && (
@@ -58,6 +86,18 @@ export function DetailDialog({ item, seasons, onClose }: Props): React.JSX.Eleme
             {item.title}
           </h2>
           <p className="detail__facts">{facts(item).join(' · ')}</p>
+          {item.kind !== 'series' &&
+            (playable(item) ? (
+              <button
+                type="button"
+                className="button detail__play"
+                onClick={(event) => play(item, event.currentTarget)}
+              >
+                ▶ Play
+              </button>
+            ) : (
+              <p className="detail__unplayable muted">Not playable in this browser yet.</p>
+            ))}
           {metadata !== null && metadata.genres.length > 0 && (
             <ul className="detail__genres" aria-label="Genres">
               {metadata.genres.map((genre) => (
@@ -79,6 +119,16 @@ export function DetailDialog({ item, seasons, onClose }: Props): React.JSX.Eleme
                 {season.episodes.map((episode) => (
                   <li key={episode.id}>
                     <span className="muted">{episode.episode ?? '–'}</span> {episode.title}
+                    {playable(episode) && (
+                      <button
+                        type="button"
+                        className="chip chip--small detail__episode-play"
+                        aria-label={`Play ${episode.title}`}
+                        onClick={(event) => play(episode, event.currentTarget)}
+                      >
+                        ▶
+                      </button>
+                    )}
                   </li>
                 ))}
               </ol>
@@ -86,6 +136,7 @@ export function DetailDialog({ item, seasons, onClose }: Props): React.JSX.Eleme
           ))}
         </div>
       </div>
+      {playing !== null && <PlayerDialog item={playing} onClose={stop} />}
     </dialog>
   );
 }

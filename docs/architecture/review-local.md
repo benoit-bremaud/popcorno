@@ -1,101 +1,60 @@
-# Local review — popcorno (issue #4 TMDB metadata)
+# Local review — popcorno (issue #7 direct play)
 
 - Date: 2026-10-23
-- Commit reviewed: fabd3bc (feat) · fixes: 121efd6 (review findings) + 681ae7f (lint ignore for QA scripts)
-- Scope: branch diff `main...HEAD` (apps/server `src/metadata/*`, `src/library/*`, `src/http.ts`, `src/app.ts`, `src/config.ts`, Drizzle migration 0001, packages/shared, docs)
-- Checks run: design (`architecture-guardian`) · docs (`doc-auditor`) · tests (`test-auditor`) · security (`security-policy` pass) · correctness (`code-review` flow)
-- Verdict at review time: **fix Must Have first** · Must 7 · Should 20 · Nice 11
-- Resolution: every Must and Should applied; Nice items filed as a follow-up issue; Disagree items kept as designed. No owner decision was needed (no trade-off among the Musts).
+- Commit reviewed: 6fa92d9 (feat) · fixes: the `fix(playback)` commit that follows it
+- Scope: branch diff `origin/main...HEAD` (packages/shared `playback.ts`, apps/server
+  `src/playback/*`, `library/path-guard.ts`, `library/repository.ts`, apps/web `catalog/DetailDialog.tsx`,
+  `playback/*`, styles, docs)
+- Checks run: design + docs (`architecture-guardian`) · tests (`test-auditor`) · security +
+  correctness (Opus read-only pass)
+- Verdict at review time: **ship after the gate fix** · Must 2 (SonarQube gate) · Should 11 · Nice 9
+- Resolution: both Musts and every Should applied; Nice items filed as a follow-up issue;
+  Disagree items kept as designed.
 
-## Pre-merge gate (head SHA 681ae7f, before the PR)
+## Pre-merge gate (head SHA of the fix commit, before the PR)
 
-| Step        | Result |
-| ----------- | ------ |
-| 1 Tests     | ✅ 146 unit/integration (Vitest, 12 files) · no E2E suite yet (Playwright planned) |
-| 2 Coverage  | tests ✅ 98.25 % stmts / 93.45 % branches / 93.89 % funcs / 98.62 % lines (floor 80) · docs ✅ 100 % (85/85 exports, floor 90) |
-| 3 SonarQube | ✅ PASSED (new code: 0 issue, 0 hotspot, 0 % duplication, 95.6 % coverage). The scan on fabd3bc FAILED on 2 smells (S4624 nested template literal, S1874 deprecated `z.string().url()`); a first fix introduced 2 × S9382 (`await` in a loop) — all cleared, none waived |
-| 4 Secrets   | ✅ gitleaks clean (`main..HEAD`) · only `.env.example` tracked · diff read: nothing sensitive (fake key `qa-fake-key` only in the QA double) |
-| 5 QA pass   | ✅ full with a **mocked TMDB** (no real key available): built server on loopback + `ffprobe`, scan with include, media list, artwork route (200 / 400 / 404), enrich plain / refresh / 400 / 404, no-key mode, 0 warn / 0 error in the server log: `qa/2026-10-23-issue-4-tmdb-metadata/` |
+| Step        | Result                                                                                                                                                                                                                          |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 Tests     | ✅ 16 shared + 191 server + 42 web (Vitest) · Playwright play + seek in Chromium and Firefox (QA script)                                                                                                                         |
+| 2 Coverage  | tests ✅ server 98.22 % stmts / 94.34 % branches / 94 % funcs / 98.5 % lines · web 100 / 91.2 / 100 / 100 · shared 100 % (floor 80) · docs ✅ every new export documented (design/docs audit)                                     |
+| 3 SonarQube | ✅ PASSED. The first scan on 6fa92d9 FAILED on 2 new issues (S4084 `<video>` without `<track>`, S7765 `.some()` → `.includes()`), both fixed, none waived                                                                      |
+| 4 Secrets   | ✅ gitleaks clean (`origin/main..HEAD`) · only `.env.example` tracked · diff read: nothing sensitive                                                                                                                             |
+| 5 QA pass   | ✅ full: generated MP4/H.264+AAC and AVI/MPEG-4 under a scratch `MEDIA_ROOT`, scan, curl 206 / 416, Play → `<video>` plays, seek to 20–25 s (Chromium, Firefox), Escape closes the player and returns focus to Play, AVI shows the note, console clean, network 206 only: `qa/2026-10-23-issue-7-direct-play/` |
 
-- Gate: **GREEN — merge authorised** once the PR review is handled (CI, Copilot / Codex, owner approval). Caveat recorded: the QA used a TMDB double; a replay against the real API with a key is filed as a Nice follow-up.
-
-## PR review rounds and final gate (PR #16)
-
-After the PR opened, CodeQL raised 2 alerts and Codex 15 findings over five rounds. All
-were fixed, each thread got an inline reply, and the sixth Codex round on `3a41acb` was
-clean. Owner decisions taken through MCDA: `@fastify/static` for the artwork route (CodeQL
-rate limiting), read access token only (no v3 key in URLs), a `parsed_title` grouping key
-(migration 0002), and one `LibraryLock` shared by scan and enrich.
-
-| Commit  | Fix |
-| ------- | --- |
-| 530d4d0 | test compares the parsed image hostname (CodeQL #12) |
-| 08cd7c8 | artwork served by `@fastify/static`, `serve: false` (CodeQL #11) |
-| 754100f | `parsed_title` grouping key, series tag propagation, read-token contract |
-| d9c9312 | shared `LibraryLock`; an unmatched series is not revisited |
-| 4b259a1 | a revisit keeps the stored match; stills serialised; `skipped` excludes revisits |
-| d9c7636 | poster then backdrop; image size cap enforced while streaming |
-| 3a41acb | one TMDB queue per server; unmatch clears the episodes; specials marked looked up |
-| final   | `ARTWORK_DIR` created at start-up (QA finding) |
-
-| Step        | Result (final head) |
-| ----------- | ------------------- |
-| 1 Tests     | ✅ 157 unit/integration (Vitest) · no E2E suite yet |
-| 2 Coverage  | tests ✅ 98.05 % stmts / 93.77 % branches / 93.75 % funcs / 98.36 % lines · docs ✅ every new export documented |
-| 3 SonarQube | ✅ PASSED (one S2201 found on d9c7636, fixed before push) |
-| 4 Secrets   | ✅ gitleaks clean · diff read: only the QA fake key |
-| 5 QA pass   | ✅ replayed on the built tree with the TMDB double: `qa/2026-10-23-issue-4-pr-review/` (429 retry and shared lock exercised; one start-up warn found and fixed) |
-| CI          | ✅ 9/9 checks on 3a41acb, CodeQL 0 open alert |
-
-- Gate: **GREEN**. The QA used a TMDB double; a replay against the real API is in #15.
+- Gate: **GREEN** — the merge waits on the PR review (CI, Codex) and the owner's approval.
 
 ## 🔴 Must Have
 
-- `apps/server/src/metadata/artwork-cache.ts:37` `[sonar]` · S4624 nested template literal · split into `digest + extname(path)` ✅
-- `apps/server/src/metadata/tmdb-client.ts:158` `[sonar]` · S1874 deprecated `z.string().url()` · `z.url()` ✅
-- `docs/architecture/specs/tmdb-metadata.md:80`, ADR-0003 § 4, sequence 02, data-flow 06 `[docs]` · digest formula documented as `sha256(path)`, code hashes `size + path` · docs aligned ✅
-- ADR-0003 Consequences, sequence 02 notes `[docs]` · "client strips the key from any error" — the key never enters an error (header only); claim replaced by what the error carries ✅
-- spec § Technology, ADR-0003 § 4, sequence 02 `[docs]` · configuration "read once per run" at run start — it is read lazily on the first image download and cached for the client's life · aligned ✅
-- `docs/architecture/specs/tmdb-metadata.md:48` `[docs]` · success guarantee "every pending row has `metadataFetchedAt`" false for `failed` rows · qualified ✅
-- `packages/shared/src/index.ts:153`, README, spec `[docs]` · `ScanReport.metadata` null also when the include threw · documented ✅
+- `apps/web/src/playback/PlayerDialog.tsx:39` `[correctness]` · SonarQube S4084, `<video>` without `<track>` · fixed: an empty captions track (subtitles are not served yet).
+- `packages/shared/src/playback.ts:57` `[correctness]` · SonarQube S7765 · fixed: `codecs.includes(undefined)`.
 
 ## 🟡 Should Have
 
-- `apps/server/src/metadata/tmdb-client.ts` `[security]` · no body size cap on image downloads · `IMAGE_MAX_BYTES` 10 MB checked on `Content-Length` and on the bytes read (413) ✅
-- `apps/server/src/metadata/tmdb-client.ts` `[security]` · announced `secure_base_url` trusted · pinned to `https://image.tmdb.org`, `redirect: 'error'` on image fetches ✅
-- `apps/server/src/metadata/tmdb-client.ts` `[security]` · unbounded provider strings · `.max()` 10 000 on overviews, 500 on names ✅
-- `apps/server/src/library/repository.ts:117` `[correctness]` · a rescanned changed file reverts the TMDB title and is never looked up again · `metadataFetchedAt: null` on conflict update ✅
-- `apps/server/src/metadata/repository.ts:32` `[correctness]` · episodes added after the series was matched never enriched · a series with a pending episode is pending (`EXISTS` sub-query) ✅
-- `apps/server/src/metadata/service.ts:154` `[correctness]` · spec 8b "fields kept" violated on refresh (`markUnmatched` cleared them) · `markLookedUp` writes only `metadataFetchedAt` ✅
-- `apps/server/src/metadata/service.ts`, `artwork-cache.ts` `[correctness]` · failures swallowed without a trace · `EnrichLogger` injected (`app.log`), `onError` on the cache ✅
-- `apps/server/src/metadata/service.ts:57,124` `[design][correctness]` · `reduce/.then` chains (global TS rule) vs Sonar S9382 on `await` in a loop · recursive `sequentially()` helper, neither ✅
-- `apps/server/src/metadata/tmdb-client.ts:276` `[correctness]` · a late failure reset a newer healthy configuration promise · reset only when it is still ours ✅
-- `apps/server/src/metadata/tmdb-client.ts:193` `[correctness]` · 429 / error bodies never cancelled · `body.cancel()` before retry / throw ✅
-- `apps/server/src/metadata/service.ts:93` `[correctness]` · `parseInt` accepts `12abc` as tag 12 · `^\d{1,12}$` ✅
-- `apps/server/src/metadata/artwork-cache.ts:44` `[correctness]` · fixed `.part` name races on the same still · random suffix ✅
-- `apps/server/src/metadata/artwork-cache.ts:26` `[design][tests]` · dead `directory` getter + its test · removed ✅
-- `apps/server/src/library/scanner.ts:7` `[design]` · `ScanOutcome` declared between imports · moved below ✅
-- `apps/server/src/metadata/repository.ts:48` `[design]` · `countLookedUp` selects all rows · `count()` ✅
-- `apps/server/src/metadata/service.ts:135` `[design]` · `Awaited<ReturnType<…>>` · `readonly TmdbEpisode[]` ✅
-- `apps/server/src/metadata/service.test.ts:310` `[tests]` · in-flight test depended on timing · deferred promise + `vi.waitFor` ✅
-- `apps/server/src/metadata/service.test.ts:274` `[tests]` · `setTimeout(…,1)` and two behaviours in one test · microtask yield, split ✅
-- `apps/server/src/metadata/routes.test.ts`, `service.test.ts` `[tests]` · missing: include throw path, `unknown` rows, rescan reset, late episode, 8b keep, bad tag, size cap, base pin, redirect, string bounds, concurrent cache · added (135 → 146 tests) ✅
-- spec, sequence 02, `tmdb-client.ts:57` `[docs]` · "six operations/endpoints", wrong participant names and signatures, 8a wording, images not retried on 429, 15 s / 10 s WHY, synthetic statuses, `saveMetadata` replaces title, `toEpisodeInput` tmdbId, Cache-Control WHY, `/enrich` synchronous · all aligned ✅
+- `apps/server/src/playback/routes.ts` `[security]` · TOCTOU between `realpath` / `stat` and a second open by path · fixed: open the checked real path once with `O_NOFOLLOW`, `fstat` and stream from the handle.
+- `apps/server/src/playback/range.ts` `[correctness|design]` · a malformed or multi-range header answered 416, and `null` / `undefined` carried two meanings · fixed: tagged `RangeRequest`; malformed or multi-range → 200 whole (RFC 9110 §14.2), 416 only past the end.
+- `apps/server/src/playback/routes.ts:49` `[design]` · "at or under root" repeated in scanner, library routes, playback (Rule of Three) · fixed: `isAtOrUnderRoot` in `path-guard.ts`.
+- `apps/server/src/playback/routes.ts` `[correctness]` · the 416 response carried `Content-Type: video/mp4` · fixed: set only on 200 / 206.
+- `docs/architecture/specs/direct-play.md` `[docs]` · codec table not per container, `createReadStream(start, end)` wording · fixed.
+- `apps/server/src/playback/routes.test.ts` `[tests]` · added the malformed / multi-range route cases, empty 416 body, HEAD, root = `MEDIA_ROOT`, directory at the path, the `media_not_found` code on escapes.
+- `apps/web/src/catalog/DetailDialog.test.tsx` `[tests]` · added the player's own close (Escape) leaving the detail open and an unplayable episode without a button.
+- `packages/shared/src/playback.test.ts` `[tests]` · hardcoded expected MIME (no tautology), uppercase codec and dotted names.
 
-## 🔵 Nice to Have
+## 🔵 Nice to Have (filed as a follow-up issue)
 
-Filed as issue #15 (chore(metadata): nice-to-have follow-ups from the #4 local review):
-`TMDB_LANGUAGE` validation · distinguish `metadata: null` causes · keep the previous match on a failed refresh · shared `isTmdbImagePath()` · HTTP-date `Retry-After` · split the large series tests, dateless-candidate ordering · replay the QA against the real API with a key.
+- `apps/server/src/playback/routes.ts` `[correctness]` · weak `ETag` + `If-Range` so a file replaced mid-viewing is not spliced.
+- `apps/server/src/playback/routes.ts` `[correctness]` · HEAD opens a handle and a stream it never reads.
+- `packages/shared/src/playback.ts` `[correctness]` · profile / bit depth not probed: 10-bit H.264 is offered and fails in `<video>`; first audio stream only.
+- `apps/server/src/playback/routes.ts` `[security]` · `O_NOFOLLOW` covers the last path component only; a directory swapped higher up needs write access to the media tree.
+- `apps/web/src/playback/PlayerDialog.tsx` `[correctness]` · an autoplay refusal (`NotAllowedError`) shows no hint.
+- `packages/shared/src/playback.ts:5` `[design]` · `PlaybackDecision.mime` unused by the web until a `<source type>` or #8 needs it.
 
 ## ⚪ Disagree / Intentional
 
-- `apps/server/src/metadata/tmdb-client.ts` `[design]` · interface + factory for a single implementation · the seam is the test boundary (fake client in every service / route test) and the ADR-0003 second-provider note; precedent ADR-0001 flat layering.
-- `apps/server/src/metadata/artwork-cache.ts` `[design]` · the cache depends on `TmdbClient` · keeps the client the single HTTP egress (component diagram 03).
-- `apps/server/src/metadata/matcher.ts` `[design]` · separate pure module · fixtures-only tests, no I/O (spec § Related information).
-- `apps/server/src/http.ts` `[design]` · helpers extracted from the library routes · two route modules share them; three lines each.
-- Two repositories (`library/repository.ts`, `metadata/repository.ts`) `[design]` · one per domain, same table · the metadata one owns the metadata columns only.
-- `apps/server/src/app.ts` `[design]` · `null` as the feature flag for `tmdb` / `enrich` · mirrors `TMDB_API_KEY` unset; no second mechanism.
+- `apps/server/src/playback/routes.ts` `[design]` · depends on the concrete `LibraryRepository`: flat layering per CLAUDE.md, no second implementation.
+- `packages/shared/src/playback.ts:1` `[design]` · type-only import of `index.ts`, which re-exports it: erased at runtime, no cycle.
+- `apps/web/src/playback/can-play.test.ts` `[tests]` · one-line wrapper test kept as the only link to the real DOM seam.
+- `apps/server/src/playback/routes.test.ts` `[tests]` · real file system + in-memory DB on purpose: a mocked fs would hide the symlink escape.
 
 ## Per-dimension summary
 
-- Design: no Must; dead getter, misplaced type, `reduce` chains, `count()` — all applied · Docs: five stale claims (digest, key stripping, lazy configuration, fetchedAt guarantee, null meaning) fixed, diagram re-drawn · Tests: deterministic concurrency tests, 11 new cases, 146 green · Security: size cap, host pin, no redirect, bounded strings; key never in URL / log (QA grep) · Correctness: two real bugs (rescan revert, late episodes) fixed plus 8b, logging, tag parsing, body cancel, `.part` race.
+- Design: flat, no over-engineering; one Rule-of-Three duplication fixed · Docs: every export documented, spec mismatches fixed · Tests: healthy pyramid, no domain mocks, gaps filled · Security: uuid-only input, guard re-run per request, TOCTOU narrowed to the handle · Correctness: Range semantics aligned with RFC 9110, nested dialog close guarded.
