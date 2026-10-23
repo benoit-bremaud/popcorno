@@ -4,7 +4,10 @@ Chronological operational logbook (newest first). Complements `git log` with the
 context: merged PRs, decisions, tags, infra events. Not a release changelog — that is
 `CHANGELOG.md`.
 
-## 2026-10-22 — #3 Library scan (PR pending)
+## 2026-10-22 → 2026-10-23 — #3 Library scan (PR #14 merged)
+
+- **Merged** — PR #14 squash-merged into `main` on 2026-10-23 as `1763c9c`, closing #3.
+  The Nice-to-have findings of the local review are tracked in issue #13.
 
 - **Conception gate** — textual Cockburn spec UC1 (`docs/architecture/specs/library-scan.md`),
   sequence diagram `02-sequence-scan-library.md`, ADR-0002 file-naming parser: own regex
