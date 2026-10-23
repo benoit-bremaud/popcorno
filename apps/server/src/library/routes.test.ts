@@ -26,6 +26,10 @@ describe('library routes', () => {
       mediaRoot,
       tmdb: null,
       artworkDir: join(mediaRoot, 'artwork'),
+      transcoder: () => {
+        throw new Error('FFmpeg is not used by this suite');
+      },
+      transcodeDir: tmpdir(),
     });
   });
 

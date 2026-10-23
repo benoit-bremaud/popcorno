@@ -1,6 +1,6 @@
 # ADR-0006 — HLS transcode: per-stream copy, MPEG-TS EVENT playlist, in-memory sessions
 
-- Status: proposed (owner validation pending, #8 chat)
+- Status: accepted (owner validated the weights, #8 chat, 2026-10-23)
 - Date: 2026-10-23
 - Deciders: owner
 - Related: UC5 ([spec](../specs/hls-transcode.md)), ADR-0001, ADR-0005, issue #8

@@ -172,6 +172,11 @@ export type ApiErrorCode =
   | 'enrich_running'
   | 'artwork_not_found'
   | 'media_not_found'
+  | 'not_playable'
+  | 'session_not_found'
+  | 'segment_not_found'
+  | 'transcode_busy'
+  | 'transcode_failed'
   | 'internal';
 
 /** Error body of every non-2xx response. */

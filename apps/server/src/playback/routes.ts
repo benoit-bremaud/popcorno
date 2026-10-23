@@ -34,17 +34,15 @@ interface ServableFile {
 }
 
 /**
- * Re-runs the path guard on every request (spec 4b): the real file must sit under the real
- * library root, itself the real `MEDIA_ROOT` or under it. The checked real path is then
- * opened without following a final symlink and sized from that handle, so a swap after the
- * check cannot change what is served. Null on any escape or I/O error.
+ * Re-runs the path guard (spec direct-play 4b): the real file must sit under the real
+ * library root, itself the real `MEDIA_ROOT` or under it. Returns the checked real path,
+ * or null on any escape or I/O error. Shared with the HLS session route.
  */
-async function confinedFile(
+export async function confinedPath(
   filePath: string,
   rootPath: string,
   mediaRoot: string,
-): Promise<ServableFile | null> {
-  let handle: FileHandle | null = null;
+): Promise<string | null> {
   try {
     const [file, root, realMediaRoot] = await Promise.all([
       realpath(filePath),
@@ -52,6 +50,26 @@ async function confinedFile(
       realpath(mediaRoot),
     ]);
     if (!isAtOrUnderRoot(realMediaRoot, root) || resolveUnderRoot(root, file) === null) return null;
+    return file;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Checks the path on every request, then opens the checked real path without following a
+ * final symlink and sizes it from that handle, so a swap after the check cannot change
+ * what is served. Null on any escape or I/O error.
+ */
+async function confinedFile(
+  filePath: string,
+  rootPath: string,
+  mediaRoot: string,
+): Promise<ServableFile | null> {
+  const file = await confinedPath(filePath, rootPath, mediaRoot);
+  if (file === null) return null;
+  let handle: FileHandle | null = null;
+  try {
     handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW);
     const info = await handle.stat();
     if (!info.isFile()) {

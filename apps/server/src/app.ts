@@ -12,6 +12,9 @@ import { MetadataRepository } from './metadata/repository.js';
 import { registerMetadataRoutes } from './metadata/routes.js';
 import { MetadataService } from './metadata/service.js';
 import { registerPlaybackRoutes } from './playback/routes.js';
+import { SessionManager } from './playback/session-manager.js';
+import { registerSessionRoutes } from './playback/session-routes.js';
+import type { Transcoder } from './playback/transcoder.js';
 import type { TmdbClient } from './metadata/tmdb-client.js';
 
 /** Everything `buildApp` needs; `index.ts` fills it from the config, tests from fakes. */
@@ -26,6 +29,11 @@ export interface AppOptions {
   readonly tmdb: TmdbClient | null;
   /** Folder the artwork cache writes to and `GET /artwork/:file` serves from. */
   readonly artworkDir: string;
+  /** Process boundary to FFmpeg, injected so tests never spawn it (ADR-0006). */
+  readonly transcoder: Transcoder;
+  /** Parent of the HLS session directories (`ServerConfig.transcodeDir`). */
+  readonly transcodeDir: string;
+  readonly transcodeMaxSessions?: number;
   readonly logger?: boolean;
 }
 
@@ -71,6 +79,14 @@ export function buildApp(options: AppOptions): FastifyInstance {
     artworkDir: options.artworkDir,
   });
   registerPlaybackRoutes(app, { repository, mediaRoot: options.mediaRoot });
+  const sessions = new SessionManager({
+    transcoder: options.transcoder,
+    dir: options.transcodeDir,
+    maxSessions: options.transcodeMaxSessions ?? 1,
+    logger: app.log,
+  });
+  registerSessionRoutes(app, { repository, sessions, mediaRoot: options.mediaRoot });
+  app.addHook('onClose', async () => sessions.closeAll());
 
   return app;
 }

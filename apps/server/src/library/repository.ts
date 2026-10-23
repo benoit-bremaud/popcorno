@@ -208,6 +208,22 @@ export class LibraryRepository {
     return row?.filePath ? { filePath: row.filePath, rootPath: row.rootPath } : null;
   }
 
+  /** The streams of one media row in scan order (empty for an unknown id). */
+  findMediaStreams(id: string): StreamInfo[] {
+    return this.db
+      .select({
+        type: streams.type,
+        codec: streams.codec,
+        width: streams.width,
+        height: streams.height,
+        language: streams.language,
+      })
+      .from(streams)
+      .where(eq(streams.mediaId, id))
+      .orderBy(streams.position)
+      .all();
+  }
+
   /** Every media row of the library with its streams, in insertion order. */
   listMedia(libraryId: string): Media[] {
     const rows = this.db
