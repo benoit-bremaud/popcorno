@@ -39,7 +39,8 @@ type Props = {
 /**
  * UC5: a full-viewport modal `<dialog>` on the native `<video controls>`. It asks the
  * server for a playback session, then plays the file directly or the HLS playlist, sends
- * heartbeats while open, and ends the session when it unmounts (Close or Escape).
+ * heartbeats while open, and ends the session on `close` (Close or Escape); a tab closed
+ * without it is left to the server's idle watchdog.
  */
 export function PlayerDialog({
   item,
@@ -58,17 +59,16 @@ export function PlayerDialog({
     if (dialog !== null && !dialog.open) dialog.showModal();
   }, []);
 
+  // One start per mounted player: StrictMode re-runs effects, and a second POST would race
+  // the first for the transcode slot. The session ends on `close`, not in a cleanup.
+  const started = useRef<ReturnType<PlaybackApi['start']> | null>(null);
+  started.current ??= api.start(item.id, directPlay);
+
   useEffect(() => {
     let active = true;
-    let sessionId: string | null = null;
     const run = async (): Promise<void> => {
-      const result = await api.start(item.id, directPlay);
-      if (result !== 'busy' && result !== 'failed' && result.mode === 'hls') {
-        sessionId = result.sessionId;
-        // Closed while the transcode was starting: end it at once.
-        if (!active) await api.stop(result.sessionId);
-      }
-      if (!active) return;
+      const result = await started.current;
+      if (!active || result === null) return;
       if (result === 'busy') setStatus({ kind: 'error', message: BUSY });
       else if (result === 'failed') setStatus({ kind: 'error', message: FAILED });
       else setStatus({ kind: 'ready', start: result });
@@ -76,9 +76,16 @@ export function PlayerDialog({
     void run();
     return () => {
       active = false;
-      if (sessionId !== null) void api.stop(sessionId);
     };
-  }, [api, item.id, directPlay]);
+  }, []);
+
+  /** Close button, Escape: the HLS session ends (even if it is still starting). */
+  async function endSession(): Promise<void> {
+    const result = await started.current;
+    if (result !== null && typeof result === 'object' && result.mode === 'hls') {
+      await api.stop(result.sessionId);
+    }
+  }
 
   const start = status.kind === 'ready' ? status.start : null;
 
@@ -103,7 +110,15 @@ export function PlayerDialog({
   }, [api, attach, start]);
 
   return (
-    <dialog ref={ref} className="player" aria-label={`Playing ${item.title}`} onClose={onClose}>
+    <dialog
+      ref={ref}
+      className="player"
+      aria-label={`Playing ${item.title}`}
+      onClose={() => {
+        void endSession();
+        onClose();
+      }}
+    >
       <button
         type="button"
         className="detail__close player__close"
@@ -129,7 +144,9 @@ export function PlayerDialog({
           src={start.mode === 'direct' ? start.url : undefined}
           controls
           autoPlay
-          onError={fail}
+          // In HLS mode hls.js reports fatal errors itself; a detach (re-render, close) also
+          // fires `error` on the element and must not count as a failure.
+          onError={start.mode === 'direct' ? fail : undefined}
         />
       )}
     </dialog>

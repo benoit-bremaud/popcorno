@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -42,10 +43,10 @@ describe('PlayerDialog over HLS', () => {
     expect(url).toBe(HLS.url);
 
     await user.click(screen.getByRole('button', { name: 'Close player' }));
-    expect(api.stop).not.toHaveBeenCalled(); // the caller unmounts the player on `close`
+    await waitFor(() => expect(api.stop).toHaveBeenCalledWith('s1'));
   });
 
-  it('ends the session and detaches hls.js when it unmounts', async () => {
+  it('detaches hls.js when it unmounts, leaving the session to close or the watchdog', async () => {
     const api = fakeApi(HLS);
     const detach = vi.fn();
     const { unmount } = render(
@@ -57,14 +58,32 @@ describe('PlayerDialog over HLS', () => {
         attach={async () => detach}
       />,
     );
-    await screen.findByLabelText('Playing Heat');
     await waitFor(() => expect(document.querySelector('video')).not.toBeNull());
     await act(async () => undefined);
 
     unmount();
 
-    expect(api.stop).toHaveBeenCalledWith('s1');
     expect(detach).toHaveBeenCalledOnce();
+    expect(api.stop).not.toHaveBeenCalled();
+  });
+
+  it('starts one session only, even when effects run twice (StrictMode)', async () => {
+    const api = fakeApi(HLS);
+    render(
+      <StrictMode>
+        <PlayerDialog
+          item={heat}
+          directPlay={false}
+          onClose={vi.fn()}
+          api={api}
+          attach={async () => () => undefined}
+        />
+      </StrictMode>,
+    );
+    await waitFor(() => expect(document.querySelector('video')).not.toBeNull());
+
+    expect(api.start).toHaveBeenCalledOnce();
+    expect(api.stop).not.toHaveBeenCalled();
   });
 
   it('sends a heartbeat every 20 s while open', async () => {
@@ -120,19 +139,31 @@ describe('PlayerDialog over HLS', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('This file could not be played.');
   });
 
-  it('ends a session that started after the player was closed', async () => {
+  it('ends a session that was still starting when the player closed', async () => {
     let resolve: (start: PlaybackStart) => void = () => undefined;
     const api = {
       ...fakeApi(HLS),
       start: vi.fn(() => new Promise<PlaybackStart>((done) => (resolve = done))),
     };
-    const { unmount } = render(
-      <PlayerDialog item={heat} directPlay={false} onClose={vi.fn()} api={api} />,
-    );
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(<PlayerDialog item={heat} directPlay={false} onClose={onClose} api={api} />);
 
-    unmount();
+    await user.click(screen.getByRole('button', { name: 'Close player' }));
     await act(async () => resolve(HLS));
 
+    expect(onClose).toHaveBeenCalledOnce();
     expect(api.stop).toHaveBeenCalledWith('s1');
+  });
+
+  it('has no session to end for direct play', async () => {
+    const api = fakeApi({ mode: 'direct', url: '/api/media/heat/file', mime: 'video/mp4' });
+    const user = userEvent.setup();
+    render(<PlayerDialog item={heat} directPlay onClose={vi.fn()} api={api} />);
+    await waitFor(() => expect(document.querySelector('video')).not.toBeNull());
+
+    await user.click(screen.getByRole('button', { name: 'Close player' }));
+
+    expect(api.stop).not.toHaveBeenCalled();
   });
 });

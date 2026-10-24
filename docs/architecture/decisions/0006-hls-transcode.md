@@ -86,8 +86,9 @@ Points: A = 200+100+100+75 · B = 40+125+100+75 · C = 160+75+80+60. **A.**
 
 ## 5. hls.js integration
 
-- **A — `hls.js` dependency, dynamic `import()` only for HLS sessions**, native HLS when
-  `canPlayType('application/vnd.apple.mpegurl')` (Safari).
+- **A — `hls.js` dependency, dynamic `import()` only for HLS sessions**; native HLS only
+  where MSE is missing (iOS Safari). QA found that Chromium answers `maybe` to
+  `canPlayType('application/vnd.apple.mpegurl')` yet fails to demux, so hls.js comes first.
 - **B — Static import** in `PlayerDialog`.
 - **C — Native HLS only** (no dependency).
 
@@ -130,6 +131,10 @@ Points: A = 150+125+60+100+40 · B = 60+125+75+60+50 · C = 150+50+60+100+30. **
 (exact pinned version), `PlayerDialog` takes a source `{ kind: 'direct' | 'hls', url }`.
 
 ## Consequences
+
+- The player starts its session once per mount and ends it on the dialog's `close`
+  event, not in an effect cleanup: StrictMode re-runs effects, and a second POST would race
+  the first for the single transcode slot (found in QA).
 
 - Seeking past the transcoded part is impossible until a seek-ahead follow-up (2-C later).
 - HEVC 4K is transcoded on CPU and scaled to 1080p: may be slower than real time on weak

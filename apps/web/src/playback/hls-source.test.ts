@@ -46,7 +46,8 @@ afterEach(() => {
 });
 
 describe('attachHls', () => {
-  it('uses the native HLS support when the browser has it', async () => {
+  it('falls back to native HLS without MSE (iOS Safari)', async () => {
+    hlsState.supported = false;
     const element = video(true);
 
     const detach = await attachHls(element, '/p.m3u8', vi.fn());
@@ -57,14 +58,15 @@ describe('attachHls', () => {
     expect(element.hasAttribute('src')).toBe(false);
   });
 
-  it('loads the playlist through hls.js otherwise, and destroys it on detach', async () => {
-    const element = video(false);
+  it('prefers hls.js when MSE exists, even if native HLS is claimed', async () => {
+    const element = video(true);
 
     const detach = await attachHls(element, '/p.m3u8', vi.fn());
 
     const [hls] = hlsState.instances;
     expect(hls?.loadSource).toHaveBeenCalledWith('/p.m3u8');
     expect(hls?.attachMedia).toHaveBeenCalledWith(element);
+    expect(element.hasAttribute('src')).toBe(false);
     detach();
     expect(hls?.destroy).toHaveBeenCalledOnce();
   });
