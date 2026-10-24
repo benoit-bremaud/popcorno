@@ -21,6 +21,19 @@
 
 - Gate (pre-push): **GREEN — push authorised**. Merge gate re-runs on the merged SHA.
 
+## Pre-merge gate (merged SHA c67eef6 — main had not moved, so the branch head is the merge result)
+
+| Step | Result |
+|---|---|
+| 1 Tests | ✅ 16 shared · ✅ 245 server · ✅ 67 web |
+| 2 Coverage | server 98.18 % stmts / 95.35 % branches / 95.28 % funcs / 98.32 % lines · web 100 / 92.98 / 100 / 100 |
+| 3 SonarQube | ✅ PASSED |
+| 4 Secrets | ✅ gitleaks clean (`origin/main..HEAD`) · only `.env.example` tracked · no tool text left in docs |
+| 5 QA pass | ✅ Chromium, real HEVC MKV through FFmpeg after the Codex fixes (1280×720, plays, console clean), close removes the session dir and FFmpeg · `qa/2026-10-23-issue-8-hls-transcode/chromium-3-premerge-c67eef6.png` · Firefox not re-run (unchanged web path, passed on 91f4197) |
+
+- Codex review on PR #29: 9 findings over 5 rounds, 8 fixed (cover-art probe + re-probe migration, integer session limit, even scaled height, owned-dir cleanup, leaked doc text, native HLS errors), 1 deferred to #28 (check/open race on the input path); CodeQL `js/missing-rate-limiting` on the `onReady` hook dismissed as a false positive (owner decision).
+- Gate: **GREEN — merge authorised on owner approval**.
+
 ## 🔴 Must Have
 
 - `apps/server/src/playback/session-manager.ts:67` `[security|correctness|design|docs]` · limit check before two awaits: N concurrent POSTs started N FFmpeg (CPU/disk exhaustion), and the comment claimed the opposite · **fixed**: `starting` counter reserved before the first await, test with two parallel opens.
