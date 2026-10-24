@@ -145,6 +145,15 @@ describe('playback session routes', () => {
     expect(spawned[0]?.slice(4, 6)).toEqual(['-ss', '42']);
   });
 
+  it('starts over when the offset is at or past the end of the file', async () => {
+    const media = await scanned('Heat (1995).mkv');
+
+    const response = await start(media.id, false, 60);
+
+    expect(response.json<PlaybackStart>().offsetSec).toBe(0);
+    expect(spawned[0]).not.toContain('-ss');
+  });
+
   it('keeps the direct-play timeline at 0 when resuming', async () => {
     const media = await scanned('Heat (1995).mp4');
 
@@ -153,7 +162,7 @@ describe('playback session routes', () => {
     expect(response.json<PlaybackStart>().offsetSec).toBe(0);
   });
 
-  it.each([-1, 1.5, 'x'])('rejects the start offset %s', async (startSec) => {
+  it.each([-1, 1.5, 'x', 7 * 86_400 + 1])('rejects the start offset %s', async (startSec) => {
     const media = await scanned('Heat (1995).mkv');
 
     const response = await app.inject({

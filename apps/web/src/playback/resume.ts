@@ -9,7 +9,7 @@ export function resumeAt(progress: WatchProgress | undefined): number {
   return progress.positionSec >= MIN_RESUME_SEC ? progress.positionSec : 0;
 }
 
-/** `h:mm:ss` from one hour, `m:ss` below. */
+/** Whole seconds as `h:mm:ss` from one hour, `m:ss` below. */
 export function formatPosition(totalSec: number): string {
   const hours = Math.floor(totalSec / 3600);
   const minutes = Math.floor((totalSec % 3600) / 60);

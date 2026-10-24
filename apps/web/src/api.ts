@@ -62,16 +62,14 @@ export type PlaybackStartError = 'busy' | 'failed';
  * starts an HLS session. URLs come back relative to the API and are prefixed here.
  */
 export async function startPlayback(
-  mediaId: string,
-  directPlay: boolean,
-  startSec = 0,
+  body: PlaybackSessionBody,
   fetchFn: Fetch = fetch,
 ): Promise<PlaybackStart | PlaybackStartError> {
   try {
     const response = await fetchFn(`${API}/playback/sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mediaId, directPlay, startSec } satisfies PlaybackSessionBody),
+      body: JSON.stringify(body),
     });
     if (response.status === 503) return 'busy';
     if (!response.ok) return 'failed';

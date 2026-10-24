@@ -70,14 +70,15 @@ genre 99, artwork cached by digest under `ARTWORK_DIR`, scan chains the enrichme
 `POST /libraries/:id/enrich`, `GET /artwork/:file`); #5 catalog grid (ADR-0004); #7 direct
 play (spec `docs/architecture/specs/direct-play.md`, ADR-0005: pure `decidePlayback` in
 `packages/shared` fed by `canPlayType`, `GET /media/:id/file` with single-range 206 and the
-path guard re-run per request, Play + native `<video>` player in `DetailDialog`); #8 HLS transcode (spec
-`docs/architecture/specs/hls-transcode.md`, ADR-0006: every Play posts `/playback/sessions`,
-the server confirms direct play with `directPlayMime` or runs FFmpeg into an in-memory
-session — H.264/AAC copied, the rest re-encoded, MPEG-TS EVENT playlist, 60 s idle
-watchdog + 20 s web heartbeat, hls.js loaded on demand); #9 resume (spec `docs/architecture/specs/resume-playback.md`,
-ADR-0007: `watch_progress` keyed by `profile_id` `'default'` until #10, `PUT
-/media/:id/progress` every 10 s / on pause / on close, `GET /progress`, `startSec` →
-FFmpeg `-ss` + `offsetSec` in the answer, Next episode button). Next: #10 profiles.
+path guard re-run per request, Play + native `<video>` player in `DetailDialog`); #8 HLS
+transcode (spec `docs/architecture/specs/hls-transcode.md`, ADR-0006: every Play posts
+`/playback/sessions`, the server confirms direct play with `directPlayMime` or runs FFmpeg
+into an in-memory session — H.264/AAC copied, the rest re-encoded, MPEG-TS EVENT playlist,
+60 s idle watchdog + 20 s web heartbeat, hls.js loaded on demand); #9 resume (spec
+`docs/architecture/specs/resume-playback.md`, ADR-0007: `watch_progress` keyed by
+`profile_id` `'default'` until #10, `PUT /media/:id/progress` every 10 s / on pause / on
+close, `GET /progress`, `startSec` → FFmpeg `-ss` + `offsetSec` in the answer, Next episode
+button). Next: #10 profiles.
 
 Server layout (flat, component diagram 03): `src/library/` holds the pure `name-parser`
 and `path-guard`, the `ffprobe` runner (only process egress), the `scanner`, the per-library

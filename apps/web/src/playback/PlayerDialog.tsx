@@ -42,7 +42,8 @@ type Props = {
   readonly next?: Media | null;
   /** Plays `next`; this player's session is already ended and its position saved. */
   readonly onNext?: (next: Media) => void;
-  readonly onClose: () => void;
+  /** `saved` settles once the last position is stored (or its save failed). */
+  readonly onClose: (saved: Promise<void>) => void;
   readonly api?: PlaybackApi;
   readonly attach?: typeof attachHls;
 };
@@ -68,8 +69,13 @@ export function PlayerDialog({
   const video = useRef<HTMLVideoElement>(null);
   const [status, setStatus] = useState<Status>({ kind: 'starting' });
   const [offerNext, setOfferNext] = useState(false);
+  /** No position is known (nor saved) before the first `loadedmetadata` and its seek. */
+  const positioned = useRef(false);
+  const leaving = useRef(false);
   /** Playback is over: the message shows and the transcode slot is freed (spec 4a). */
   const fail = (): void => {
+    // Moving to the next episode ends the session first: hls.js 404s are expected then.
+    if (leaving.current) return;
     setStatus({ kind: 'error', message: FAILED });
     void endSession();
   };
@@ -84,7 +90,7 @@ export function PlayerDialog({
   const started = useRef<ReturnType<PlaybackApi['start']> | null>(null);
 
   useEffect(() => {
-    started.current ??= api.start(item.id, directPlay, startSec);
+    started.current ??= api.start({ mediaId: item.id, directPlay, startSec });
     let active = true;
     const run = async (): Promise<void> => {
       const result = await started.current;
@@ -109,40 +115,48 @@ export function PlayerDialog({
   }
 
   const start = status.kind === 'ready' ? status.start : null;
+  /** Media time at which the player's timeline starts (ADR-0007 §2). */
+  const offsetSec = start?.offsetSec ?? 0;
 
   /** Media time of the picture on screen: the HLS timeline starts at `offsetSec`. */
   function position(): number | null {
     const element = video.current;
-    if (start === null || element === null) return null;
-    return start.offsetSec + Math.floor(element.currentTime);
+    if (!positioned.current || element === null) return null;
+    return offsetSec + Math.floor(element.currentTime);
   }
 
-  function save(): void {
+  function save(): Promise<void> {
     const at = position();
-    if (at !== null) void api.save(item.id, at);
+    return at === null ? Promise.resolve() : api.save(item.id, at);
   }
 
   /** Direct play seeks in the file; an HLS session already starts at the offset. */
   function seekToStart(): void {
     const element = video.current;
-    const seek = startSec - (start?.offsetSec ?? 0);
+    const seek = startSec - offsetSec;
     if (element !== null && seek > 0) element.currentTime = seek;
+    positioned.current = true;
   }
 
-  /** UC7 trigger: 90 % of the duration (the file's, else the element's) or the end. */
+  /**
+   * UC7 trigger: 90 % of the duration or the end. Without the file's duration only a
+   * direct-played element knows it: a growing HLS playlist reports what is written so far.
+   */
   function checkFinished(): void {
     const at = position();
     const element = video.current;
     if (next === null || offerNext || at === null || element === null) return;
-    const elementDuration = Number.isFinite(element.duration)
-      ? (start?.offsetSec ?? 0) + Math.floor(element.duration)
-      : null;
+    const elementDuration =
+      start?.mode === 'direct' && Number.isFinite(element.duration)
+        ? Math.floor(element.duration)
+        : null;
     const durationSec = item.durationSec ?? elementDuration;
     if (isFinished({ positionSec: at, durationSec })) setOfferNext(true);
   }
 
   async function playNext(episode: Media): Promise<void> {
-    save();
+    leaving.current = true;
+    await save();
     await endSession();
     onNext?.(episode);
   }
@@ -150,7 +164,7 @@ export function PlayerDialog({
   useEffect(() => {
     if (start === null) return;
     const timer = setInterval(() => {
-      if (video.current?.paused === false) save();
+      if (video.current?.paused === false) void save();
     }, SAVE_MS);
     return () => clearInterval(timer);
     // `save` reads refs and `start` only: the interval is reset when playback (re)starts.
@@ -189,9 +203,9 @@ export function PlayerDialog({
       className="player"
       aria-label={`Playing ${item.title}`}
       onClose={() => {
-        save();
+        const saved = save();
         void endSession();
-        onClose();
+        onClose(saved);
       }}
     >
       <button
@@ -218,7 +232,7 @@ export function PlayerDialog({
           controls
           autoPlay
           onLoadedMetadata={seekToStart}
-          onPause={save}
+          onPause={() => void save()}
           onTimeUpdate={checkFinished}
           onEnded={() => {
             if (next !== null) setOfferNext(true);

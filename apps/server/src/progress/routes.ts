@@ -4,7 +4,9 @@ import { apiError, invalid } from '../http.js';
 import type { ProgressRepository } from './repository.js';
 
 const mediaParams = z.object({ id: z.uuid() });
-const progressBody = z.object({ positionSec: z.int().min(0) });
+/** A week of media time: far beyond any file, small enough to keep rows sane. */
+export const MAX_POSITION_SEC = 7 * 86_400;
+const progressBody = z.object({ positionSec: z.int().min(0).max(MAX_POSITION_SEC) });
 
 /**
  * UC6 (spec resume-playback §2.2): `PUT /media/:id/progress` (204 | 400 | 404
@@ -25,5 +27,5 @@ export function registerProgressRoutes(
     return reply.code(204).send();
   });
 
-  app.get('/progress', async () => deps.progress.list());
+  app.get('/progress', (_request, reply) => reply.send(deps.progress.list()));
 }

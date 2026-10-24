@@ -64,7 +64,7 @@ detail dialog is open (UC4).
 
 Main scenario:
 
-1. The detail dialog loads `GET /progress` and shows **Resume from 12:34** and **Start
+1. The detail dialog loads `GET /progress` (Play appears once it answered) and shows **Resume from 12:34** and **Start
    over**.
 2. The viewer presses **Resume**.
 3. The web posts `{ mediaId, directPlay, startSec: 754 }`.
@@ -73,16 +73,21 @@ Main scenario:
 5. The web seeks to `startSec − offsetSec` once metadata is loaded, then plays.
 6. Every 10 s while playing, on pause and on close, the web sends `PUT
    /media/:id/progress` with `offsetSec + currentTime`.
-7. The viewer closes the player; the last position is saved (`keepalive`) and the detail
-   dialog reloads the progress.
+7. The viewer closes the player; the last position is saved (`keepalive`) and, once that
+   save settled, the detail dialog reloads the progress.
 
 Extensions:
 
 - 2a. **Start over** → `startSec: 0`; the old position is overwritten by the next save.
-- 4a. HLS input seeking lands on the keyframe before the offset: the resumed picture may
-  start up to one keyframe interval early (a few seconds). Accepted (ADR-0007 §2).
-- 4b. `startSec` past the end of the file → FFmpeg writes no segment, `502
-  transcode_failed` as in #8. The web never sends it for a finished title (R4).
+- 4a. HLS input seeking lands on the keyframe before the offset when the video is copied:
+  the picture starts up to one keyframe interval early while `offsetSec` still says
+  `startSec`, so saved positions can run that much ahead. Accepted (ADR-0007 §2);
+  re-encoded video is frame-accurate. Seek-ahead will remove the offset.
+- 4b. `startSec` at or past the known duration → the server starts over (`offsetSec: 0`),
+  so FFmpeg never holds a slot for an empty output. Both `startSec` and `positionSec` are
+  capped at one week of media time (400 beyond).
+- 5a. Nothing is saved before `loadedmetadata` and the resume seek, so an early close or
+  pause cannot overwrite the saved position with 0.
 - 6a. A save fails (network) → ignored; the next one carries the newer position.
 - 6b. The title is deleted by a re-scan → its rows go with it (cascade).
 
@@ -90,7 +95,8 @@ Extensions:
 
 **Precondition**: an episode plays and a later episode of the same series exists.
 
-1. The position crosses 90 % or the video ends.
+1. The position crosses 90 % of the file's duration (of the element's in direct play when
+   the file's is unknown; never of a growing HLS playlist) or the video ends.
 2. The player shows **Next episode: <title>**.
 3. The viewer presses it; the player saves the current position and plays the next
    episode from its own resume point (or 0).

@@ -235,7 +235,7 @@ describe('PlayerDialog resume and progress', () => {
 
     fireEvent.loadedMetadata(element);
 
-    expect(api.start).toHaveBeenCalledWith('heat', true, 754);
+    expect(api.start).toHaveBeenCalledWith({ mediaId: 'heat', directPlay: true, startSec: 754 });
     expect(element.currentTime).toBe(754);
   });
 
@@ -266,6 +266,7 @@ describe('PlayerDialog resume and progress', () => {
     const user = userEvent.setup();
     render(<PlayerDialog item={heat} directPlay onClose={vi.fn()} api={api} />);
     const element = await videoOf();
+    fireEvent.loadedMetadata(element);
     element.currentTime = 30;
 
     await user.click(screen.getByRole('button', { name: 'Close player' }));
@@ -280,6 +281,7 @@ describe('PlayerDialog resume and progress', () => {
     const element = await videoOf();
     let paused = true;
     Object.defineProperty(element, 'paused', { get: () => paused });
+    fireEvent.loadedMetadata(element);
     element.currentTime = 5;
 
     act(() => vi.advanceTimersByTime(10_000));
@@ -287,7 +289,20 @@ describe('PlayerDialog resume and progress', () => {
     paused = false;
     act(() => vi.advanceTimersByTime(10_000));
 
+    expect(api.save).toHaveBeenCalledOnce();
     expect(api.save).toHaveBeenCalledWith('heat', 5);
+  });
+
+  it('saves nothing before the metadata and the resume seek', async () => {
+    const api = fakeApi(DIRECT);
+    const user = userEvent.setup();
+    render(<PlayerDialog item={heat} directPlay startSec={754} onClose={vi.fn()} api={api} />);
+    const element = await videoOf();
+
+    fireEvent.pause(element);
+    await user.click(screen.getByRole('button', { name: 'Close player' }));
+
+    expect(api.save).not.toHaveBeenCalled();
   });
 });
 
@@ -311,6 +326,7 @@ describe('PlayerDialog next episode', () => {
       />,
     );
     const element = await videoOf();
+    fireEvent.loadedMetadata(element);
     element.currentTime = 89;
     fireEvent.timeUpdate(element);
     expect(screen.queryByRole('button', { name: /Next episode/ })).toBeNull();
@@ -341,9 +357,51 @@ describe('PlayerDialog next episode', () => {
     expect(screen.getByRole('button', { name: 'Next episode: Second ▶' })).toBeInTheDocument();
   });
 
+  it('does not trust a growing HLS duration when the file duration is unknown', async () => {
+    render(
+      <PlayerDialog
+        item={{ ...episode, durationSec: null }}
+        directPlay={false}
+        next={following}
+        onClose={vi.fn()}
+        api={fakeApi(HLS)}
+        attach={async () => () => undefined}
+      />,
+    );
+    const element = await videoOf();
+    Object.defineProperty(element, 'duration', { value: 12 });
+    fireEvent.loadedMetadata(element);
+    element.currentTime = 11;
+
+    fireEvent.timeUpdate(element);
+
+    expect(screen.queryByRole('button', { name: /Next episode/ })).toBeNull();
+  });
+
+  it('uses the element duration in direct play when the file duration is unknown', async () => {
+    render(
+      <PlayerDialog
+        item={{ ...episode, durationSec: null }}
+        directPlay
+        next={following}
+        onClose={vi.fn()}
+        api={fakeApi(DIRECT)}
+      />,
+    );
+    const element = await videoOf();
+    Object.defineProperty(element, 'duration', { value: 100 });
+    fireEvent.loadedMetadata(element);
+    element.currentTime = 90;
+
+    fireEvent.timeUpdate(element);
+
+    expect(screen.getByRole('button', { name: 'Next episode: Second ▶' })).toBeInTheDocument();
+  });
+
   it('offers nothing after the last episode', async () => {
     render(<PlayerDialog item={episode} directPlay onClose={vi.fn()} api={fakeApi(DIRECT)} />);
     const element = await videoOf();
+    fireEvent.loadedMetadata(element);
     element.currentTime = 99;
 
     fireEvent.timeUpdate(element);

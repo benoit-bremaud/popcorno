@@ -45,11 +45,15 @@ export function DetailDialog({
 }: Props): React.JSX.Element {
   const ref = useRef<HTMLDialogElement>(null);
   const [playing, setPlaying] = useState<Playing | null>(null);
-  const [saved, setSaved] = useState<ReadonlyMap<string, WatchProgress>>(new Map());
+  /** Null until the first load: Play waits for it, so a resume point is never skipped. */
+  const [saved, setSaved] = useState<ReadonlyMap<string, WatchProgress> | null>(null);
+  /** Only the latest request may set `saved` (a slow first load must not win). */
+  const request = useRef(0);
 
   async function refreshProgress(): Promise<void> {
+    const id = ++request.current;
     const rows = await progress();
-    setSaved(new Map(rows.map((row) => [row.mediaId, row])));
+    if (id === request.current) setSaved(new Map(rows.map((row) => [row.mediaId, row])));
   }
 
   useEffect(() => {
@@ -57,7 +61,7 @@ export function DetailDialog({
     // Once per opened title; the player's close refreshes it again.
   }, []);
 
-  const resume = (media: Media): number => resumeAt(saved.get(media.id));
+  const resume = (media: Media): number => resumeAt(saved?.get(media.id));
   // The Play button that opened the player gets the focus back when it closes (spec step 6).
   const trigger = useRef<HTMLButtonElement | null>(null);
 
@@ -66,10 +70,12 @@ export function DetailDialog({
     setPlaying({ media, startSec });
   }
 
-  function stop(): void {
+  /** Reloads the offer once the player's last save has landed (spec step 7). */
+  async function stop(lastSave: Promise<void>): Promise<void> {
     setPlaying(null);
     trigger.current?.focus();
-    void refreshProgress();
+    await lastSave;
+    await refreshProgress();
   }
 
   // Every file with a video stream plays: directly, or through HLS (spec hls-transcode R1).
@@ -114,7 +120,7 @@ export function DetailDialog({
             {item.title}
           </h2>
           <p className="detail__facts">{facts(item).join(' · ')}</p>
-          {playable(item) && (
+          {playable(item) && saved !== null && (
             <div className="detail__actions">
               {resume(item) > 0 ? (
                 <>
@@ -165,7 +171,7 @@ export function DetailDialog({
                 {season.episodes.map((episode) => (
                   <li key={episode.id}>
                     <span className="muted">{episode.episode ?? '–'}</span> {episode.title}
-                    {playable(episode) && (
+                    {playable(episode) && saved !== null && (
                       <button
                         type="button"
                         className="chip chip--small detail__episode-play"
@@ -194,7 +200,7 @@ export function DetailDialog({
           startSec={playing.startSec}
           next={nextEpisode(seasons, playing.media)}
           onNext={(episode) => setPlaying({ media: episode, startSec: resume(episode) })}
-          onClose={stop}
+          onClose={(lastSave) => void stop(lastSave)}
           api={api}
         />
       )}

@@ -64,17 +64,33 @@ describe('progress routes', () => {
     expect(response.json()).toEqual({ error: 'media_not_found' });
   });
 
-  it.each([{ positionSec: -1 }, { positionSec: 1.5 }, {}, { positionSec: '3' }])(
-    'rejects the body %j',
-    async (payload) => {
-      const { app, addMedia } = setup();
-      const id = addMedia('film', 100);
+  it.each([
+    { positionSec: -1 },
+    { positionSec: 1.5 },
+    {},
+    { positionSec: '3' },
+    { positionSec: 7 * 86_400 + 1 },
+  ])('rejects the body %j', async (payload) => {
+    const { app, addMedia } = setup();
+    const id = addMedia('film', 100);
 
-      const response = await app.inject({ method: 'PUT', url: `/media/${id}/progress`, payload });
+    const response = await app.inject({ method: 'PUT', url: `/media/${id}/progress`, payload });
 
-      expect(response.statusCode).toBe(400);
-    },
-  );
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('answers 404 for a series row, which has no file', async () => {
+    const { app, addMedia } = setup();
+    const series = addMedia('series', null);
+
+    const response = await app.inject({
+      method: 'PUT',
+      url: `/media/${series}/progress`,
+      payload: { positionSec: 1 },
+    });
+
+    expect(response.statusCode).toBe(404);
+  });
 
   it('rejects a media id that is not a uuid', async () => {
     const { app } = setup();

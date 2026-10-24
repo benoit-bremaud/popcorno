@@ -2,10 +2,7 @@ import { desc, eq } from 'drizzle-orm';
 import { isFinished } from '@popcorno/shared';
 import type { WatchProgress } from '@popcorno/shared';
 import type { AppDatabase } from '../db/index.js';
-import { media, watchProgress } from '../db/schema.js';
-
-/** The only profile until #10 (ADR-0007 §1). */
-export const DEFAULT_PROFILE = 'default';
+import { DEFAULT_PROFILE, media, watchProgress } from '../db/schema.js';
 
 /** Reads and writes `watch_progress` (spec resume-playback §2.1). */
 export class ProgressRepository {

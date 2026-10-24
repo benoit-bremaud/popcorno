@@ -67,7 +67,7 @@ describe('startPlayback', () => {
       ),
     );
 
-    const start = await startPlayback('m1', false, 30, fetchFn);
+    const start = await startPlayback({ mediaId: 'm1', directPlay: false, startSec: 30 }, fetchFn);
 
     expect(start).toEqual({
       mode: 'hls',
@@ -87,21 +87,25 @@ describe('startPlayback', () => {
     [502, 'failed'],
     [404, 'failed'],
   ])('maps %i to %s', async (status, expected) => {
-    await expect(startPlayback('m1', true, 0, async () => respond({}, status))).resolves.toBe(
-      expected,
-    );
+    await expect(
+      startPlayback({ mediaId: 'm1', directPlay: true }, async () => respond({}, status)),
+    ).resolves.toBe(expected);
   });
 
   it('maps a 2xx body that is not JSON to failed', async () => {
     const fetchFn = vi.fn(async () => new Response('<html>Bad gateway</html>', { status: 200 }));
-    await expect(startPlayback('m1', true, 0, fetchFn)).resolves.toBe('failed');
+    await expect(startPlayback({ mediaId: 'm1', directPlay: true }, fetchFn)).resolves.toBe(
+      'failed',
+    );
   });
 
   it('maps a network failure to failed', async () => {
     const fetchFn = vi.fn(async (): Promise<Response> => {
       throw new TypeError('offline');
     });
-    await expect(startPlayback('m1', true, 0, fetchFn)).resolves.toBe('failed');
+    await expect(startPlayback({ mediaId: 'm1', directPlay: true }, fetchFn)).resolves.toBe(
+      'failed',
+    );
   });
 });
 
