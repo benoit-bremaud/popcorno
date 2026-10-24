@@ -1,8 +1,21 @@
-# Project log — Popcorno
+# Project log — PopCornTV
 
 Chronological operational logbook (newest first). Complements `git log` with the human
 context: merged PRs, decisions, tags, infra events. Not a release changelog — that is
-`CHANGELOG.md`.
+`CHANGELOG.md`. Entries before 2026-10-24 #27 use the former name, Popcorno.
+
+## 2026-10-24 — #27 rename to PopCornTV (PR #34 merged, `858b402`)
+
+- **Why** — popcorno .com is for sale and the npm / GitHub names are taken by torrent
+  projects.
+- **Decisions** (owner-validated MCDA) — display `PopCornTV`, slug `popcorntv` everywhere
+  (npm `@popcorntv/*`, Docker image / service / volume, default SQLite file); SonarQube key
+  renamed `popcorno` → `popcorntv` in the UI, history kept; GitHub repo rename and local
+  folder + Claude memory move after merge. Historical log entries and QA reports keep the
+  old name. No data migration: no production deployment yet.
+- **Gate** on `6d0e53e` — 19 shared + 270 server + 100 web tests, coverage ≥ 98 %
+  statements, SonarQube PASSED, gitleaks clean, CI 9/9, Codex clean. Squash-merged with
+  owner approval.
 
 ## 2026-10-24 — #9 resume playback (PR #32 merged, `2abd850`)
 
