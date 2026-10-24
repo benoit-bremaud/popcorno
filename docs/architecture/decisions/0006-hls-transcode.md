@@ -127,8 +127,9 @@ Points: A = 150+125+60+100+40 · B = 60+125+75+60+50 · C = 150+50+60+100+30. **
 `ffmpeg-args.ts` (pure), `transcoder.ts` (only child-process egress, `spawn` injected),
 `session-manager.ts` (Map, timers, temp dirs), `session-routes.ts`. Config:
 `FFMPEG_PATH`, `TRANSCODE_DIR`, `TRANSCODE_MAX_SESSIONS`. New error codes
-`session_not_found`, `not_playable`, `transcode_busy`, `transcode_failed`. Web: `hls.js`
-(exact pinned version), `PlayerDialog` takes a source `{ kind: 'direct' | 'hls', url }`.
+`session_not_found`, `segment_not_found`, `not_playable`, `transcode_busy`,
+`transcode_failed`. Web: `hls.js` (exact pinned version); `PlayerDialog` takes the
+browser's `directPlay` answer and starts the session itself.
 
 ## Consequences
 

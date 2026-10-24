@@ -86,6 +86,8 @@ export function buildApp(options: AppOptions): FastifyInstance {
     logger: app.log,
   });
   registerSessionRoutes(app, { repository, sessions, mediaRoot: options.mediaRoot });
+  // Sessions live in memory: directories left by a previous run belong to no one.
+  app.addHook('onReady', async () => sessions.clean());
   app.addHook('onClose', async () => sessions.closeAll());
 
   return app;

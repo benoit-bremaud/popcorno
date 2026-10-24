@@ -106,6 +106,26 @@ describe('PlayerDialog over HLS', () => {
     expect(api.heartbeat).toHaveBeenCalledWith('s1');
   });
 
+  it('stops the heartbeat once unmounted', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const api = fakeApi(HLS);
+    const { unmount } = render(
+      <PlayerDialog
+        item={heat}
+        directPlay={false}
+        onClose={vi.fn()}
+        api={api}
+        attach={async () => () => undefined}
+      />,
+    );
+    await waitFor(() => expect(document.querySelector('video')).not.toBeNull());
+
+    unmount();
+    vi.advanceTimersByTime(60_000);
+
+    expect(api.heartbeat).not.toHaveBeenCalled();
+  });
+
   it('shows the failure message when hls.js reports a fatal error', async () => {
     const api = fakeApi(HLS);
     render(
@@ -122,6 +142,32 @@ describe('PlayerDialog over HLS', () => {
     );
 
     expect(await screen.findByRole('alert')).toHaveTextContent('This file could not be played.');
+    await waitFor(() => expect(api.stop).toHaveBeenCalledWith('s1'));
+  });
+
+  it('fails when the hls.js chunk cannot be loaded', async () => {
+    const api = fakeApi(HLS);
+    render(
+      <PlayerDialog
+        item={heat}
+        directPlay={false}
+        onClose={vi.fn()}
+        api={api}
+        attach={async () => {
+          throw new TypeError('Failed to fetch dynamically imported module');
+        }}
+      />,
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('This file could not be played.');
+  });
+
+  it('tells the viewer when another title holds the transcoder', async () => {
+    render(<PlayerDialog item={heat} directPlay={false} onClose={vi.fn()} api={fakeApi('busy')} />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Another title is being transcoded. Try again later.',
+    );
   });
 
   it('shows a status while the server prepares the stream', () => {

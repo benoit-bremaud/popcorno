@@ -11,11 +11,12 @@ export type ExitListener = (code: number | null, stderrTail: string) => void;
 
 /**
  * Single child-process egress of the playback domain (component diagram, ADR-0006):
- * injected into the session manager so tests never run FFmpeg.
+ * injected into the session manager so tests never run FFmpeg. `onExit` is called exactly
+ * once, also when the binary cannot start (code null).
  */
 export type Transcoder = (args: readonly string[], onExit: ExitListener) => TranscodeHandle;
 
-/** The subset of `child_process.spawn` the transcoder uses; injected by its tests. */
+/** `child_process.spawn`, injected by the transcoder's tests. */
 export type Spawn = typeof nodeSpawn;
 
 /** FFmpeg errors are short; keep only the end so a chatty failure cannot grow memory. */

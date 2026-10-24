@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { access, mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { FastifyBaseLogger } from 'fastify';
@@ -22,7 +22,10 @@ export interface SessionManagerOptions {
   readonly pollMs?: number;
 }
 
-/** Outcome of `open`. */
+/**
+ * Outcome of `open`: `busy` when `maxSessions` are running, `failed` when FFmpeg exits or
+ * writes no playlist within `readyTimeoutMs`, `not_playable` without a video stream.
+ */
 export type OpenResult =
   | { readonly kind: 'ready'; readonly id: string }
   | { readonly kind: 'not_playable' | 'busy' | 'failed' };
@@ -32,6 +35,9 @@ interface Session {
   readonly handle: TranscodeHandle;
   readonly timer: NodeJS.Timeout;
 }
+
+/** Directory names `open` creates under `dir`; `clean` removes only these. */
+const SESSION_PREFIX = 'session-';
 
 const IDLE_MS = 60_000;
 const READY_TIMEOUT_MS = 20_000;
@@ -52,6 +58,8 @@ async function exists(path: string): Promise<boolean> {
  */
 export class SessionManager {
   private readonly sessions = new Map<string, Session>();
+  /** Opens past the limit check but not yet in `sessions` (between their awaits). */
+  private starting = 0;
   private readonly idleMs: number;
   private readonly readyTimeoutMs: number;
   private readonly pollMs: number;
@@ -62,24 +70,44 @@ export class SessionManager {
     this.pollMs = options.pollMs ?? POLL_MS;
   }
 
-  /** Starts FFmpeg on a confined real path and resolves once its playlist exists. */
+  /**
+   * Starts FFmpeg on a confined real path and resolves once its playlist exists. Creates
+   * one directory under `dir`, removed again on every failure path.
+   */
   async open(inputPath: string, streams: readonly StreamInfo[]): Promise<OpenResult> {
-    if (this.sessions.size >= this.options.maxSessions) return { kind: 'busy' };
-    await mkdir(this.options.dir, { recursive: true });
-    const dir = await mkdtemp(join(this.options.dir, 'session-'));
+    if (this.sessions.size + this.starting >= this.options.maxSessions) return { kind: 'busy' };
+    // Reserved before the first await, so concurrent opens cannot both pass the limit.
+    this.starting += 1;
+    let dir: string;
+    try {
+      await mkdir(this.options.dir, { recursive: true });
+      dir = await mkdtemp(join(this.options.dir, SESSION_PREFIX));
+    } finally {
+      this.starting -= 1;
+    }
     const args = ffmpegArgs(inputPath, streams, dir);
     if (args === null) {
-      await rm(dir, { recursive: true, force: true });
+      await this.remove(dir);
       return { kind: 'not_playable' };
     }
     const id = randomUUID();
     let exited = false;
-    const handle = this.options.transcoder(args, (code, stderrTail) => {
-      exited = true;
-      if (code !== 0) this.options.logger.warn({ session: id, code, stderrTail }, 'ffmpeg failed');
-    });
+    let handle: TranscodeHandle;
+    try {
+      handle = this.options.transcoder(args, (code, stderrTail) => {
+        exited = true;
+        // `close` forgets the session before killing it: only a crash is still in the map.
+        if (code === 0 || !this.sessions.has(id)) return;
+        this.options.logger.warn({ session: id, code, stderrTail }, 'ffmpeg failed');
+        // A crashed transcode must not hold the slot until the viewer gives up.
+        void this.close(id);
+      });
+    } catch (error) {
+      this.options.logger.error({ err: error }, 'ffmpeg could not start');
+      await this.remove(dir);
+      return { kind: 'failed' };
+    }
     const timer = setTimeout(() => void this.close(id), this.idleMs);
-    // The slot is taken before awaiting, so two concurrent opens cannot both pass the limit.
     this.sessions.set(id, { dir, handle, timer });
 
     const deadline = Date.now() + this.readyTimeoutMs;
@@ -120,11 +148,38 @@ export class SessionManager {
     this.sessions.delete(id);
     clearTimeout(session.timer);
     session.handle.kill();
-    await rm(session.dir, { recursive: true, force: true });
+    await this.remove(session.dir);
     return true;
   }
 
-  /** Server shutdown: every session is closed. */
+  /**
+   * Removes leftovers of a previous run: only the `session-*` directories, so a
+   * misconfigured `TRANSCODE_DIR` never wipes anything else.
+   */
+  async clean(): Promise<void> {
+    let names: string[];
+    try {
+      names = await readdir(this.options.dir);
+    } catch {
+      return;
+    }
+    const leftovers = names.filter((name) => name.startsWith(SESSION_PREFIX));
+    await Promise.all(leftovers.map((name) => this.remove(join(this.options.dir, name))));
+  }
+
+  /**
+   * Never rejects: the idle timer calls `close` without awaiting it, and a SIGKILLed FFmpeg
+   * may still be writing while the tree is removed (ENOTEMPTY), so it is retried and logged.
+   */
+  private async remove(dir: string): Promise<void> {
+    try {
+      await rm(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    } catch (error) {
+      this.options.logger.error({ err: error, dir }, 'session directory not removed');
+    }
+  }
+
+  /** Server shutdown: every session is closed (`close` never rejects). */
   async closeAll(): Promise<void> {
     await Promise.all([...this.sessions.keys()].map((id) => this.close(id)));
   }

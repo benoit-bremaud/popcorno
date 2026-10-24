@@ -10,7 +10,7 @@ export interface ServerConfig {
   readonly mediaRoot: string;
   readonly ffprobePath: string;
   readonly ffmpegPath: string;
-  /** Absolute parent of the HLS session directories; emptied at start (ADR-0006). */
+  /** Absolute parent of the HLS session directories; leftover `session-*` ones are removed at start. */
   readonly transcodeDir: string;
   /** HLS sessions allowed at once; one more gets `503 transcode_busy`. */
   readonly transcodeMaxSessions: number;

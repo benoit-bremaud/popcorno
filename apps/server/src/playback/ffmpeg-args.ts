@@ -3,6 +3,7 @@ import type { StreamInfo } from '@popcorno/shared';
 
 /** Playlist and segment names FFmpeg writes in a session directory (spec hls-transcode §2.3). */
 export const PLAYLIST_NAME = 'index.m3u8';
+/** The only segment names ever joined to a session directory. */
 export const SEGMENT_PATTERN = /^segment-\d{5}\.ts$/;
 const SEGMENT_TEMPLATE = 'segment-%05d.ts';
 const SEGMENT_SECONDS = 6;
@@ -61,8 +62,9 @@ export function ffmpegArgs(
     'error',
     '-i',
     inputPath,
+    // Capital V skips attached pictures (cover art stored as a video stream).
     '-map',
-    '0:v:0',
+    '0:V:0',
     ...(audio === null ? [] : ['-map', '0:a:0']),
     ...videoArgs(video),
     ...(audio === null ? [] : audioArgs(audio)),
@@ -75,6 +77,7 @@ export function ffmpegArgs(
     '0',
     '-hls_playlist_type',
     'event',
+    // FFmpeg renames the playlist into place: "exists" means "complete" for the poller.
     '-hls_flags',
     'temp_file',
     '-hls_segment_filename',

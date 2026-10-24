@@ -1,4 +1,4 @@
-import type { Library, Media, PlaybackStart } from '@popcorno/shared';
+import type { Library, Media, PlaybackSessionBody, PlaybackStart } from '@popcorno/shared';
 
 /** Prefix the dev server (and the production reverse proxy) forwards to the API. */
 const API = '/api';
@@ -47,11 +47,6 @@ export function artworkUrl(file: string): string {
   return `${API}/artwork/${encodeURIComponent(file)}`;
 }
 
-/** URL of the direct-play stream `GET /media/:id/file` (HTTP Range, ADR-0005). */
-export function mediaFileUrl(mediaId: string): string {
-  return `${API}/media/${encodeURIComponent(mediaId)}/file`;
-}
-
 /** Why a playback could not start: another title holds the transcoder, or anything else. */
 export type PlaybackStartError = 'busy' | 'failed';
 
@@ -64,20 +59,20 @@ export async function startPlayback(
   directPlay: boolean,
   fetchFn: Fetch = fetch,
 ): Promise<PlaybackStart | PlaybackStartError> {
-  let response: Response;
   try {
-    response = await fetchFn(`${API}/playback/sessions`, {
+    const response = await fetchFn(`${API}/playback/sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mediaId, directPlay }),
+      body: JSON.stringify({ mediaId, directPlay } satisfies PlaybackSessionBody),
     });
+    if (response.status === 503) return 'busy';
+    if (!response.ok) return 'failed';
+    const start = (await response.json()) as PlaybackStart;
+    return { ...start, url: `${API}${start.url}` };
   } catch {
+    // Network failure, or a body that is not JSON (a proxy error page).
     return 'failed';
   }
-  if (response.status === 503) return 'busy';
-  if (!response.ok) return 'failed';
-  const start = (await response.json()) as PlaybackStart;
-  return { ...start, url: `${API}${start.url}` };
 }
 
 /** Keeps a paused HLS session alive (ADR-0006 §4); a lost heartbeat is harmless. */

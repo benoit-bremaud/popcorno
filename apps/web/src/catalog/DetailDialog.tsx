@@ -141,6 +141,7 @@ export function DetailDialog({
       </div>
       {playing !== null && (
         <PlayerDialog
+          key={playing.id}
           item={playing}
           directPlay={decidePlayback(playing, canPlay).mode === 'direct'}
           onClose={stop}

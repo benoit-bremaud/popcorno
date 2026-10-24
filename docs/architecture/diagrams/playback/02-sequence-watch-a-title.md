@@ -24,18 +24,22 @@ sequenceDiagram
   V->>W: Press Play
   W->>W: decidePlayback(media, canPlayType)
   W->>API: POST /playback/sessions {mediaId, directPlay}
-  API->>API: find media + path guard
+  API->>API: find media (404 media_not_found)
   alt directPlay and directPlayMime(media) ≠ null
     API-->>W: 200 {mode: direct, url: /media/:id/file}
-    W->>API: GET /media/:id/file (Range) — #7 flow
+    W->>API: GET /media/:id/file (Range) — #7 flow, path guard there
   else HLS
-    API->>SM: open(media)
-    alt TRANSCODE_MAX_SESSIONS reached
+    API->>API: path guard on the stored path (404 media_not_found)
+    API->>SM: open(realPath, streams)
+    alt TRANSCODE_MAX_SESSIONS reached (counted before any await)
       SM-->>API: busy
       API-->>W: 503 transcode_busy
+    else no video stream
+      SM-->>API: not_playable
+      API-->>W: 422 not_playable
     else slot free
       SM->>FS: mkdtemp
-      SM->>TR: start(ffmpegArgs(media, dir))
+      SM->>TR: run(ffmpegArgs(realPath, streams, dir))
       TR->>FF: spawn (no shell, -i path)
       FF->>FS: index.m3u8, segment-00000.ts …
       SM->>FS: wait for index.m3u8 (≤ 20 s)

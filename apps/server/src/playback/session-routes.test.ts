@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -40,8 +41,8 @@ describe('playback session routes', () => {
     const transcoder: Transcoder = (args) => {
       spawned.push(args);
       const playlist = args.at(-1) ?? '';
-      void writeFile(join(dirname(playlist), 'segment-00000.ts'), 'TS');
-      void writeFile(playlist, '#EXTM3U\n');
+      writeFileSync(join(dirname(playlist), 'segment-00000.ts'), 'TS');
+      writeFileSync(playlist, '#EXTM3U\n');
       return { kill: kills };
     };
     app = buildApp({

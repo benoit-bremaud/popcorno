@@ -86,6 +86,11 @@ describe('startPlayback', () => {
     );
   });
 
+  it('maps a 2xx body that is not JSON to failed', async () => {
+    const fetchFn = vi.fn(async () => new Response('<html>Bad gateway</html>', { status: 200 }));
+    await expect(startPlayback('m1', true, fetchFn)).resolves.toBe('failed');
+  });
+
   it('maps a network failure to failed', async () => {
     const fetchFn = vi.fn(async (): Promise<Response> => {
       throw new TypeError('offline');

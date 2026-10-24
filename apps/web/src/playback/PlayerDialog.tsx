@@ -52,7 +52,11 @@ export function PlayerDialog({
   const ref = useRef<HTMLDialogElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const [status, setStatus] = useState<Status>({ kind: 'starting' });
-  const fail = (): void => setStatus({ kind: 'error', message: FAILED });
+  /** Playback is over: the message shows and the transcode slot is freed (spec 4a). */
+  const fail = (): void => {
+    setStatus({ kind: 'error', message: FAILED });
+    void endSession();
+  };
 
   useEffect(() => {
     const dialog = ref.current;
@@ -62,9 +66,9 @@ export function PlayerDialog({
   // One start per mounted player: StrictMode re-runs effects, and a second POST would race
   // the first for the transcode slot. The session ends on `close`, not in a cleanup.
   const started = useRef<ReturnType<PlaybackApi['start']> | null>(null);
-  started.current ??= api.start(item.id, directPlay);
 
   useEffect(() => {
+    started.current ??= api.start(item.id, directPlay);
     let active = true;
     const run = async (): Promise<void> => {
       const result = await started.current;
@@ -77,6 +81,7 @@ export function PlayerDialog({
     return () => {
       active = false;
     };
+    // Mount only: a new title remounts the player (`key` in DetailDialog).
   }, []);
 
   /** Close button, Escape: the HLS session ends (even if it is still starting). */
@@ -95,7 +100,14 @@ export function PlayerDialog({
     let detach: (() => void) | null = null;
     let active = true;
     const run = async (): Promise<void> => {
-      const cleanup = await attach(element, start.url, fail);
+      let cleanup: () => void;
+      try {
+        cleanup = await attach(element, start.url, fail);
+      } catch {
+        // The hls.js chunk could not be loaded.
+        if (active) fail();
+        return;
+      }
       if (active) detach = cleanup;
       else cleanup();
     };
@@ -133,9 +145,7 @@ export function PlayerDialog({
         </p>
       )}
       {status.kind === 'starting' && (
-        <p className="player__status muted" role="status">
-          Preparing playback…
-        </p>
+        <output className="player__status muted">Preparing playback…</output>
       )}
       {start !== null && (
         <video

@@ -78,9 +78,11 @@ Extensions:
 - 3b. Media without a video stream → `422 not_playable`; no Play button is shown for it.
 - 3c. `TRANSCODE_MAX_SESSIONS` reached → `503 transcode_busy`; the player shows *Another
   title is being transcoded. Try again later.*
-- 3d. FFmpeg exits, or no playlist after 20 s → session removed, `502 transcode_failed`;
+- 3d. FFmpeg exits or cannot spawn, or no playlist after 20 s → session removed,
+  `502 transcode_failed`;
   the player shows *This file could not be played*.
-- 4a. hls.js reports a fatal error → same message as 3d, the session is deleted.
+- 4a. hls.js reports a fatal error (or its chunk cannot load) → same message as 3d, the
+  session is deleted at once.
 - 5a. No request for 60 s (tab closed, network lost) → the watchdog kills the session.
 - 5b. Request on a closed or unknown session → `404 session_not_found`.
 - 5c. Segment name not matching `segment-NNNNN.ts` → `404` (no path is built from it).
@@ -91,8 +93,11 @@ Extensions:
 
 - `transcoder.ts` is the only child-process egress of the playback domain; tests inject a
   fake `spawn`. No real FFmpeg in unit tests.
-- Temp root `TRANSCODE_DIR` (default `<os tmp>/popcorno-transcode`), emptied at start;
-  one `mkdtemp` directory per session; segment names validated before any `join`.
+- Temp root `TRANSCODE_DIR` (default `data/transcode`); at start only the `session-*`
+  directories a previous run left are removed; one `mkdtemp` directory per session;
+  segment names validated before any `join`.
+- At most `TRANSCODE_MAX_SESSIONS` sessions, counted before the first `await`, so
+  concurrent requests cannot exceed it. A ready session whose FFmpeg crashes is closed.
 - Playlist served as `application/vnd.apple.mpegurl`, segments as `video/mp2t`, both
   `Cache-Control: no-store`.
 - hls.js is loaded with a dynamic `import()` only for HLS sessions: the catalog bundle

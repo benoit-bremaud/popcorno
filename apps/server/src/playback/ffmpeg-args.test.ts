@@ -40,7 +40,7 @@ describe('ffmpegArgs', () => {
         '/t',
       ) ?? [];
 
-    expect(args.filter((arg) => arg.startsWith('0:'))).toEqual(['0:v:0', '0:a:0']);
+    expect(args.filter((arg) => arg.startsWith('0:'))).toEqual(['0:V:0', '0:a:0']);
     expect(valueOf(args, '-c:a')).toBe('aac');
     expect(valueOf(args, '-hls_time')).toBe('6');
     expect(valueOf(args, '-hls_playlist_type')).toBe('event');
