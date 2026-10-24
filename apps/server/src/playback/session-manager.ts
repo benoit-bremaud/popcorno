@@ -74,10 +74,10 @@ export class SessionManager {
   }
 
   /**
-   * Starts FFmpeg on a confined real path and resolves once its playlist exists. Creates
+   * Starts FFmpeg on a confined real path, at `startSec` (resume), and resolves once its playlist exists. Creates
    * one directory under `dir`, removed again on every failure path.
    */
-  async open(inputPath: string, streams: readonly StreamInfo[]): Promise<OpenResult> {
+  async open(inputPath: string, streams: readonly StreamInfo[], startSec = 0): Promise<OpenResult> {
     if (this.sessions.size + this.starting >= this.options.maxSessions) return { kind: 'busy' };
     // Reserved before the first await, so concurrent opens cannot both pass the limit.
     this.starting += 1;
@@ -88,7 +88,7 @@ export class SessionManager {
     } finally {
       this.starting -= 1;
     }
-    const args = ffmpegArgs(inputPath, streams, dir);
+    const args = ffmpegArgs(inputPath, streams, dir, startSec);
     if (args === null) {
       await this.remove(dir);
       return { kind: 'not_playable' };

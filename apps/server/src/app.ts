@@ -11,6 +11,8 @@ import { ArtworkCache } from './metadata/artwork-cache.js';
 import { MetadataRepository } from './metadata/repository.js';
 import { registerMetadataRoutes } from './metadata/routes.js';
 import { MetadataService } from './metadata/service.js';
+import { ProgressRepository } from './progress/repository.js';
+import { registerProgressRoutes } from './progress/routes.js';
 import { registerPlaybackRoutes } from './playback/routes.js';
 import { SessionManager } from './playback/session-manager.js';
 import { registerSessionRoutes } from './playback/session-routes.js';
@@ -86,6 +88,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
     logger: app.log,
   });
   registerSessionRoutes(app, { repository, sessions, mediaRoot: options.mediaRoot });
+  registerProgressRoutes(app, { progress: new ProgressRepository(options.db) });
   // Sessions live in memory: directories left by a previous run belong to no one.
   app.addHook('onReady', async () => sessions.clean());
   app.addHook('onClose', async () => sessions.closeAll());

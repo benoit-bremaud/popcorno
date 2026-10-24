@@ -114,5 +114,7 @@ classDiagram
   an episode `posterPath` holds the still. `isDocumentary()` = genre id 99 present: the
   catalog's "documentaries" row is derived, `kind` stays structural. Persisted as columns
   on `media` with `genres` / `cast` as JSON.
-- `WatchProgress.isFinished()` = position ≥ 90 % of duration; drives "next episode".
+- `WatchProgress.isFinished()` = position ≥ 90 % of a known duration; drives "next
+  episode" (UC7). Until profiles exist (#10) every row has `profileId = 'default'`
+  (ADR-0007 §1); persisted in `watch_progress`, key `(profile_id, media_id)`.
 - `PlaybackDecider` has no state; it is a function in a class box for UML readability.

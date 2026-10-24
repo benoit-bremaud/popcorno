@@ -54,6 +54,17 @@ describe('ffmpegArgs', () => {
     expect(valueOf(args, '-i')).toBe('-y.mkv');
   });
 
+  it('seeks the input before -i when resuming', () => {
+    const args = ffmpegArgs('/m/a.mkv', [stream('video', 'h264')], '/t', 754) ?? [];
+
+    expect(valueOf(args, '-ss')).toBe('754');
+    expect(args.indexOf('-ss')).toBeLessThan(args.indexOf('-i'));
+  });
+
+  it('adds no seek when starting from the beginning', () => {
+    expect(ffmpegArgs('/m/a.mkv', [stream('video', 'h264')], '/t')).not.toContain('-ss');
+  });
+
   it('maps no audio when the file has none', () => {
     const args = ffmpegArgs('/m/a.mkv', [stream('video', 'vp9')], '/t') ?? [];
 

@@ -149,3 +149,10 @@ export function seasonsOf(series: Media, media: readonly Media[]): Season[] {
   }
   return [...seasons.entries()].map(([season, list]) => ({ season, episodes: list }));
 }
+
+/** The episode after `current` in season order (UC7), or null for the last one or a film. */
+export function nextEpisode(seasons: readonly Season[], current: Media): Media | null {
+  const episodes = seasons.flatMap((season) => season.episodes);
+  const index = episodes.findIndex((episode) => episode.id === current.id);
+  return index === -1 ? null : (episodes[index + 1] ?? null);
+}

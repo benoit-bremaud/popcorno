@@ -3,6 +3,8 @@ import {
   ApiRequestError,
   artworkUrl,
   loadCatalog,
+  loadProgress,
+  saveProgress,
   sendHeartbeat,
   startPlayback,
   stopPlayback,
@@ -59,20 +61,24 @@ describe('artworkUrl', () => {
 describe('startPlayback', () => {
   it('posts the decision and prefixes the returned URL with the API path', async () => {
     const fetchFn = vi.fn(async () =>
-      respond({ mode: 'hls', sessionId: 's', url: '/playback/sessions/s/index.m3u8' }, 201),
+      respond(
+        { mode: 'hls', sessionId: 's', url: '/playback/sessions/s/index.m3u8', offsetSec: 30 },
+        201,
+      ),
     );
 
-    const start = await startPlayback('m1', false, fetchFn);
+    const start = await startPlayback('m1', false, 30, fetchFn);
 
     expect(start).toEqual({
       mode: 'hls',
       sessionId: 's',
       url: '/api/playback/sessions/s/index.m3u8',
+      offsetSec: 30,
     });
     expect(fetchFn).toHaveBeenCalledWith('/api/playback/sessions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mediaId: 'm1', directPlay: false }),
+      body: JSON.stringify({ mediaId: 'm1', directPlay: false, startSec: 30 }),
     });
   });
 
@@ -81,21 +87,21 @@ describe('startPlayback', () => {
     [502, 'failed'],
     [404, 'failed'],
   ])('maps %i to %s', async (status, expected) => {
-    await expect(startPlayback('m1', true, async () => respond({}, status))).resolves.toBe(
+    await expect(startPlayback('m1', true, 0, async () => respond({}, status))).resolves.toBe(
       expected,
     );
   });
 
   it('maps a 2xx body that is not JSON to failed', async () => {
     const fetchFn = vi.fn(async () => new Response('<html>Bad gateway</html>', { status: 200 }));
-    await expect(startPlayback('m1', true, fetchFn)).resolves.toBe('failed');
+    await expect(startPlayback('m1', true, 0, fetchFn)).resolves.toBe('failed');
   });
 
   it('maps a network failure to failed', async () => {
     const fetchFn = vi.fn(async (): Promise<Response> => {
       throw new TypeError('offline');
     });
-    await expect(startPlayback('m1', true, fetchFn)).resolves.toBe('failed');
+    await expect(startPlayback('m1', true, 0, fetchFn)).resolves.toBe('failed');
   });
 });
 
@@ -121,5 +127,42 @@ describe('session heartbeat and stop', () => {
     });
     await expect(sendHeartbeat('s', fetchFn)).resolves.toBeUndefined();
     await expect(stopPlayback('s', fetchFn)).resolves.toBeUndefined();
+  });
+});
+
+describe('saveProgress', () => {
+  it('puts the position with keepalive', async () => {
+    const fetchFn = vi.fn(async () => new Response(null, { status: 204 }));
+
+    await saveProgress('m 1', 42, fetchFn);
+
+    expect(fetchFn).toHaveBeenCalledWith('/api/media/m%201/progress', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ positionSec: 42 }),
+      keepalive: true,
+    });
+  });
+
+  it('swallows a network failure', async () => {
+    const fetchFn = vi.fn(async (): Promise<Response> => {
+      throw new TypeError('offline');
+    });
+
+    await expect(saveProgress('m1', 1, fetchFn)).resolves.toBeUndefined();
+  });
+});
+
+describe('loadProgress', () => {
+  it('returns the saved positions', async () => {
+    const rows = [
+      { mediaId: 'm1', positionSec: 5, durationSec: 10, finished: false, updatedAt: 'x' },
+    ];
+
+    await expect(loadProgress(async () => respond(rows, 200))).resolves.toEqual(rows);
+  });
+
+  it('returns nothing when the server fails', async () => {
+    await expect(loadProgress(async () => respond({}, 500))).resolves.toEqual([]);
   });
 });

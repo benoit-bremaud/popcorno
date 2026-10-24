@@ -7,7 +7,8 @@
 ## Context
 
 Every Play goes through `POST /playback/sessions`: the server confirms direct play with
-`directPlayMime` or starts an HLS session. Resume (UC6) will only add a start offset.
+`directPlayMime` or starts an HLS session. Resume (UC6) adds a start offset:
+[02-sequence-resume-a-title](02-sequence-resume-a-title.md).
 
 ## Diagram
 

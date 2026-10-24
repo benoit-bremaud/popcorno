@@ -81,11 +81,11 @@ describe('playback session routes', () => {
     return item;
   }
 
-  function start(mediaId: string, directPlay: boolean) {
+  function start(mediaId: string, directPlay: boolean, startSec?: number) {
     return app.inject({
       method: 'POST',
       url: '/playback/sessions',
-      payload: { mediaId, directPlay },
+      payload: { mediaId, directPlay, startSec },
     });
   }
 
@@ -107,6 +107,7 @@ describe('playback session routes', () => {
       mode: 'direct',
       url: `/media/${media.id}/file`,
       mime: 'video/mp4; codecs="avc1.640028, mp4a.40.2"',
+      offsetSec: 0,
     });
     expect(spawned).toHaveLength(0);
   });
@@ -132,6 +133,36 @@ describe('playback session routes', () => {
       expect(body.url).toBe(`/playback/sessions/${body.sessionId}/index.m3u8`);
     }
     expect(spawned[0]).toContain('libx264');
+  });
+
+  it('starts FFmpeg at the resume offset and reports it', async () => {
+    const media = await scanned('Heat (1995).mkv');
+
+    const response = await start(media.id, false, 42);
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json<PlaybackStart>().offsetSec).toBe(42);
+    expect(spawned[0]?.slice(4, 6)).toEqual(['-ss', '42']);
+  });
+
+  it('keeps the direct-play timeline at 0 when resuming', async () => {
+    const media = await scanned('Heat (1995).mp4');
+
+    const response = await start(media.id, true, 42);
+
+    expect(response.json<PlaybackStart>().offsetSec).toBe(0);
+  });
+
+  it.each([-1, 1.5, 'x'])('rejects the start offset %s', async (startSec) => {
+    const media = await scanned('Heat (1995).mkv');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/playback/sessions',
+      payload: { mediaId: media.id, directPlay: false, startSec },
+    });
+
+    expect(response.statusCode).toBe(400);
   });
 
   it('serves the playlist and segments with their types, never cached', async () => {

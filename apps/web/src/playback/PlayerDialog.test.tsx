@@ -1,5 +1,5 @@
 import { StrictMode } from 'react';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PlaybackStart } from '@popcorno/shared';
@@ -11,6 +11,13 @@ const HLS: PlaybackStart = {
   mode: 'hls',
   sessionId: 's1',
   url: '/api/playback/sessions/s1/index.m3u8',
+  offsetSec: 0,
+};
+const DIRECT: PlaybackStart = {
+  mode: 'direct',
+  url: '/api/media/heat/file',
+  mime: 'video/mp4',
+  offsetSec: 0,
 };
 const heat = media({ id: 'heat', title: 'Heat' });
 
@@ -19,6 +26,7 @@ function fakeApi(result: Awaited<ReturnType<PlaybackApi['start']>>) {
     start: vi.fn(async () => result),
     heartbeat: vi.fn(async () => undefined),
     stop: vi.fn(async () => undefined),
+    save: vi.fn(async () => undefined),
   };
 }
 
@@ -203,7 +211,7 @@ describe('PlayerDialog over HLS', () => {
   });
 
   it('has no session to end for direct play', async () => {
-    const api = fakeApi({ mode: 'direct', url: '/api/media/heat/file', mime: 'video/mp4' });
+    const api = fakeApi(DIRECT);
     const user = userEvent.setup();
     render(<PlayerDialog item={heat} directPlay onClose={vi.fn()} api={api} />);
     await waitFor(() => expect(document.querySelector('video')).not.toBeNull());
@@ -211,5 +219,136 @@ describe('PlayerDialog over HLS', () => {
     await user.click(screen.getByRole('button', { name: 'Close player' }));
 
     expect(api.stop).not.toHaveBeenCalled();
+  });
+});
+
+async function videoOf(): Promise<HTMLVideoElement> {
+  await waitFor(() => expect(document.querySelector('video')).not.toBeNull());
+  return document.querySelector('video') as HTMLVideoElement;
+}
+
+describe('PlayerDialog resume and progress', () => {
+  it('asks for the resume offset and seeks a direct-played file to it', async () => {
+    const api = fakeApi(DIRECT);
+    render(<PlayerDialog item={heat} directPlay startSec={754} onClose={vi.fn()} api={api} />);
+    const element = await videoOf();
+
+    fireEvent.loadedMetadata(element);
+
+    expect(api.start).toHaveBeenCalledWith('heat', true, 754);
+    expect(element.currentTime).toBe(754);
+  });
+
+  it('does not seek an HLS stream that already starts at the offset, and saves absolute time', async () => {
+    const api = fakeApi({ ...HLS, offsetSec: 754 });
+    render(
+      <PlayerDialog
+        item={heat}
+        directPlay={false}
+        startSec={754}
+        onClose={vi.fn()}
+        api={api}
+        attach={async () => () => undefined}
+      />,
+    );
+    const element = await videoOf();
+
+    fireEvent.loadedMetadata(element);
+    expect(element.currentTime).toBe(0);
+    element.currentTime = 12.7;
+    fireEvent.pause(element);
+
+    expect(api.save).toHaveBeenCalledWith('heat', 766);
+  });
+
+  it('saves the position when the player closes', async () => {
+    const api = fakeApi(DIRECT);
+    const user = userEvent.setup();
+    render(<PlayerDialog item={heat} directPlay onClose={vi.fn()} api={api} />);
+    const element = await videoOf();
+    element.currentTime = 30;
+
+    await user.click(screen.getByRole('button', { name: 'Close player' }));
+
+    expect(api.save).toHaveBeenCalledWith('heat', 30);
+  });
+
+  it('saves every 10 s while playing, not while paused', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const api = fakeApi(DIRECT);
+    render(<PlayerDialog item={heat} directPlay onClose={vi.fn()} api={api} />);
+    const element = await videoOf();
+    let paused = true;
+    Object.defineProperty(element, 'paused', { get: () => paused });
+    element.currentTime = 5;
+
+    act(() => vi.advanceTimersByTime(10_000));
+    expect(api.save).not.toHaveBeenCalled();
+    paused = false;
+    act(() => vi.advanceTimersByTime(10_000));
+
+    expect(api.save).toHaveBeenCalledWith('heat', 5);
+  });
+});
+
+describe('PlayerDialog next episode', () => {
+  const episode = media({ id: 'e1', title: 'Pilot', kind: 'episode', durationSec: 100 });
+  const following = media({ id: 'e2', title: 'Second', kind: 'episode', durationSec: 100 });
+
+  it('offers the next episode at 90 %, then ends this session and plays it', async () => {
+    const api = fakeApi(HLS);
+    const onNext = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <PlayerDialog
+        item={episode}
+        directPlay={false}
+        next={following}
+        onNext={onNext}
+        onClose={vi.fn()}
+        api={api}
+        attach={async () => () => undefined}
+      />,
+    );
+    const element = await videoOf();
+    element.currentTime = 89;
+    fireEvent.timeUpdate(element);
+    expect(screen.queryByRole('button', { name: /Next episode/ })).toBeNull();
+
+    element.currentTime = 90;
+    fireEvent.timeUpdate(element);
+    await user.click(screen.getByRole('button', { name: 'Next episode: Second ▶' }));
+
+    expect(api.save).toHaveBeenCalledWith('e1', 90);
+    expect(api.stop).toHaveBeenCalledWith('s1');
+    expect(onNext).toHaveBeenCalledWith(following);
+  });
+
+  it('offers it when the video ends, even without a known duration', async () => {
+    render(
+      <PlayerDialog
+        item={{ ...episode, durationSec: null }}
+        directPlay
+        next={following}
+        onClose={vi.fn()}
+        api={fakeApi(DIRECT)}
+      />,
+    );
+    const element = await videoOf();
+
+    fireEvent.ended(element);
+
+    expect(screen.getByRole('button', { name: 'Next episode: Second ▶' })).toBeInTheDocument();
+  });
+
+  it('offers nothing after the last episode', async () => {
+    render(<PlayerDialog item={episode} directPlay onClose={vi.fn()} api={fakeApi(DIRECT)} />);
+    const element = await videoOf();
+    element.currentTime = 99;
+
+    fireEvent.timeUpdate(element);
+    fireEvent.ended(element);
+
+    expect(screen.queryByRole('button', { name: /Next episode/ })).toBeNull();
   });
 });

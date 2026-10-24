@@ -17,7 +17,11 @@ export interface SessionRoutesDeps {
   readonly mediaRoot: string;
 }
 
-const startBody = z.object({ mediaId: z.uuid(), directPlay: z.boolean() });
+const startBody = z.object({
+  mediaId: z.uuid(),
+  directPlay: z.boolean(),
+  startSec: z.int().min(0).default(0),
+});
 const sessionParams = z.object({ id: z.uuid() });
 const fileParams = z.object({ id: z.uuid(), file: z.string() });
 
@@ -36,7 +40,7 @@ async function openOrNull(path: string): Promise<FileHandle | null> {
 }
 
 /**
- * UC5 sessions (spec hls-transcode, ADR-0006): `POST /playback/sessions` (200 direct |
+ * UC5 sessions (spec hls-transcode, ADR-0006; resume offset ADR-0007): `POST /playback/sessions` (200 direct |
  * 201 hls | 400 | 404 `media_not_found` | 422 `not_playable` | 502 `transcode_failed` |
  * 503 `transcode_busy`), the playlist and segment files, the heartbeat and `DELETE`.
  */
@@ -44,7 +48,7 @@ export function registerSessionRoutes(app: FastifyInstance, deps: SessionRoutesD
   app.post('/playback/sessions', async (request, reply) => {
     const body = startBody.safeParse(request.body);
     if (!body.success) return reply.code(400).send(invalid(body.error.issues));
-    const { mediaId, directPlay } = body.data;
+    const { mediaId, directPlay, startSec } = body.data;
     const stored = deps.repository.findMediaFile(mediaId);
     if (stored === null) return reply.code(404).send(apiError('media_not_found'));
     const streams = deps.repository.findMediaStreams(mediaId);
@@ -56,13 +60,14 @@ export function registerSessionRoutes(app: FastifyInstance, deps: SessionRoutesD
         mode: 'direct',
         url: `/media/${mediaId}/file`,
         mime,
+        offsetSec: 0,
       };
       return reply.code(200).send(direct);
     }
 
     const input = await confinedPath(stored.filePath, stored.rootPath, deps.mediaRoot);
     if (input === null) return reply.code(404).send(apiError('media_not_found'));
-    const result = await deps.sessions.open(input, streams);
+    const result = await deps.sessions.open(input, streams, startSec);
     if (result.kind !== 'ready') {
       const { status, code } = START_ERRORS[result.kind];
       return reply.code(status).send(apiError(code));
@@ -71,6 +76,7 @@ export function registerSessionRoutes(app: FastifyInstance, deps: SessionRoutesD
       mode: 'hls',
       sessionId: result.id,
       url: `/playback/sessions/${result.id}/${PLAYLIST_NAME}`,
+      offsetSec: startSec,
     };
     return reply.code(201).send(hls);
   });

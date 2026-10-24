@@ -73,9 +73,52 @@ export interface PlaybackSessionBody {
   readonly mediaId: string;
   /** The browser's own `decidePlayback(...).mode === 'direct'`; the server confirms it. */
   readonly directPlay: boolean;
+  /** Where to resume, in seconds of media time (spec resume-playback §2.2); default 0. */
+  readonly startSec?: number;
 }
 
-/** Response of `POST /playback/sessions`: 200 direct (no session) or 201 HLS session. */
+/**
+ * Response of `POST /playback/sessions`: 200 direct (no session) or 201 HLS session.
+ * `offsetSec` is the media time at which the player's timeline starts: 0 for direct play
+ * (the web seeks itself), `startSec` for HLS (FFmpeg started there, ADR-0007 §2).
+ */
 export type PlaybackStart =
-  | { readonly mode: 'direct'; readonly url: string; readonly mime: string }
-  | { readonly mode: 'hls'; readonly sessionId: string; readonly url: string };
+  | {
+      readonly mode: 'direct';
+      readonly url: string;
+      readonly mime: string;
+      readonly offsetSec: number;
+    }
+  | {
+      readonly mode: 'hls';
+      readonly sessionId: string;
+      readonly url: string;
+      readonly offsetSec: number;
+    };
+
+/** Share of the duration after which a title counts as watched (spec resume-playback R4). */
+export const FINISHED_RATIO = 0.9;
+
+/** True when the position reached 90 % of a known, positive duration. Pure. */
+export function isFinished(progress: {
+  readonly positionSec: number;
+  readonly durationSec: number | null;
+}): boolean {
+  const { positionSec, durationSec } = progress;
+  return durationSec !== null && durationSec > 0 && positionSec >= FINISHED_RATIO * durationSec;
+}
+
+/** Body of `PUT /media/:id/progress`: whole seconds of media time. */
+export interface ProgressBody {
+  readonly positionSec: number;
+}
+
+/** One row of `GET /progress` (class diagram `WatchProgress`, profile `default`). */
+export interface WatchProgress {
+  readonly mediaId: string;
+  readonly positionSec: number;
+  readonly durationSec: number | null;
+  readonly finished: boolean;
+  /** ISO timestamp of the last save. */
+  readonly updatedAt: string;
+}

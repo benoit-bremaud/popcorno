@@ -1,10 +1,11 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import type { CanPlay, Media, StreamInfo } from '@popcorno/shared';
+import type { CanPlay, Media, StreamInfo, WatchProgress } from '@popcorno/shared';
 import type { PlaybackApi } from '../playback/PlayerDialog.js';
 import { media } from '../test-fixtures.js';
 import { DetailDialog } from './DetailDialog.js';
+import type { Season } from './catalog.js';
 
 const H264_AAC: StreamInfo[] = [
   { type: 'video', codec: 'h264', width: 1920, height: 1080, language: null },
@@ -19,22 +20,42 @@ function fakeApi(): PlaybackApi & { start: ReturnType<typeof vi.fn> } {
   return {
     start: vi.fn(async (mediaId: string, directPlay: boolean) =>
       directPlay
-        ? { mode: 'direct' as const, url: `/api/media/${mediaId}/file`, mime: 'video/mp4' }
+        ? {
+            mode: 'direct' as const,
+            url: `/api/media/${mediaId}/file`,
+            mime: 'video/mp4',
+            offsetSec: 0,
+          }
         : ('busy' as const),
     ),
     heartbeat: vi.fn(async () => undefined),
     stop: vi.fn(async () => undefined),
+    save: vi.fn(async () => undefined),
   };
 }
 
-function renderDetail(item: Media, canPlay: CanPlay = always, onClose = vi.fn()) {
+function renderDetail(
+  item: Media,
+  canPlay: CanPlay = always,
+  onClose = vi.fn(),
+  saved: readonly WatchProgress[] = [],
+  seasons: readonly Season[] = [],
+) {
   const api = fakeApi();
+  const progress = vi.fn(async () => [...saved]);
   return {
     user: userEvent.setup(),
     onClose,
     api,
     ...render(
-      <DetailDialog item={item} seasons={[]} onClose={onClose} canPlay={canPlay} api={api} />,
+      <DetailDialog
+        item={item}
+        seasons={seasons}
+        onClose={onClose}
+        canPlay={canPlay}
+        api={api}
+        progress={progress}
+      />,
     ),
   };
 }
@@ -79,7 +100,7 @@ describe('DetailDialog playback', () => {
 
     await user.click(screen.getByRole('button', { name: '▶ Play' }));
 
-    expect(api.start).toHaveBeenCalledWith('heat', false);
+    expect(api.start).toHaveBeenCalledWith('heat', false, 0);
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Another title is being transcoded. Try again later.',
     );
@@ -90,7 +111,7 @@ describe('DetailDialog playback', () => {
 
     await user.click(screen.getByRole('button', { name: '▶ Play' }));
 
-    expect(api.start).toHaveBeenCalledWith('mkv', false);
+    expect(api.start).toHaveBeenCalledWith('mkv', false, 0);
   });
 
   it('offers no Play button for a file without video', () => {
@@ -144,5 +165,60 @@ describe('DetailDialog playback', () => {
     await user.click(screen.getByRole('button', { name: 'Close' }));
 
     expect(onClose).toHaveBeenCalledOnce();
+  });
+});
+
+function saved(mediaId: string, positionSec: number, finished = false): WatchProgress {
+  return { mediaId, positionSec, durationSec: 6000, finished, updatedAt: '' };
+}
+
+describe('DetailDialog resume', () => {
+  it('offers to resume at the saved position', async () => {
+    const { user, api } = renderDetail(heat, always, vi.fn(), [saved('heat', 754)]);
+
+    await user.click(await screen.findByRole('button', { name: '▶ Resume from 12:34' }));
+
+    expect(api.start).toHaveBeenCalledWith('heat', true, 754);
+  });
+
+  it('starts over from 0 on request', async () => {
+    const { user, api } = renderDetail(heat, always, vi.fn(), [saved('heat', 754)]);
+
+    await user.click(await screen.findByRole('button', { name: 'Start over' }));
+
+    expect(api.start).toHaveBeenCalledWith('heat', true, 0);
+  });
+
+  it('offers a plain Play for a finished title', async () => {
+    const { user, api } = renderDetail(heat, always, vi.fn(), [saved('heat', 5900, true)]);
+
+    await user.click(await screen.findByRole('button', { name: '▶ Play' }));
+
+    expect(screen.queryByRole('button', { name: 'Start over' })).toBeNull();
+    expect(api.start).toHaveBeenCalledWith('heat', true, 0);
+  });
+
+  it('resumes an episode at its own position', async () => {
+    const series = media({ id: 'show', title: 'Show', kind: 'series' });
+    const pilot = media({
+      id: 'e1',
+      title: 'Pilot',
+      kind: 'episode',
+      season: 1,
+      episode: 1,
+      relativePath: 'Show/S01E01.mp4',
+      streams: H264_AAC,
+    });
+    const { user, api } = renderDetail(
+      series,
+      always,
+      vi.fn(),
+      [saved('e1', 65)],
+      [{ season: 1, episodes: [pilot] }],
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Resume Pilot from 1:05' }));
+
+    expect(api.start).toHaveBeenCalledWith('e1', true, 65);
   });
 });

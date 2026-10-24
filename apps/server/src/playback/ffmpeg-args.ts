@@ -45,12 +45,14 @@ function audioArgs(audio: StreamInfo): string[] {
  * FFmpeg arguments turning the first video and first audio stream of `inputPath` into an
  * HLS EVENT playlist in `outputDir`: copied when HLS-safe, re-encoded otherwise. Pure.
  * The input is the argument of `-i`, so a name starting with `-` cannot become an option.
- * Null when there is no video stream.
+ * `startSec > 0` seeks the input before `-i` (fast, lands on the previous keyframe) so a
+ * resume starts there (ADR-0007 §2). Null when there is no video stream.
  */
 export function ffmpegArgs(
   inputPath: string,
   streams: readonly StreamInfo[],
   outputDir: string,
+  startSec = 0,
 ): string[] | null {
   const video = first(streams, 'video');
   if (video === null) return null;
@@ -60,6 +62,7 @@ export function ffmpegArgs(
     '-nostdin',
     '-loglevel',
     'error',
+    ...(startSec > 0 ? ['-ss', String(startSec)] : []),
     '-i',
     inputPath,
     // Capital V skips attached pictures (cover art stored as a video stream).

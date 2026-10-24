@@ -37,6 +37,9 @@ flowchart LR
     Probe[ffprobe runner]
     Repo[SQLite repositories]
     Stream[Range file streamer]
+    Progress[Progress routes + repository]
+    Routes --> Progress
+    Progress --> Repo
     Routes --> Stream
     Stream --> Parser
     Routes --> Decider
@@ -81,3 +84,6 @@ flowchart LR
   `data/artwork` and downloads through the client. The scanner never calls TMDB: the
   scan route composes `scan` then `enrich` (UC1's «include»), so a TMDB failure cannot
   fail a scan.
+- Progress (#9, ADR-0007): `PUT /media/:id/progress` and `GET /progress` write and read
+  `watch_progress` through its own Drizzle repository; `isFinished` is pure in
+  `packages/shared`.
