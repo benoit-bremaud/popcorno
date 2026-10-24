@@ -81,18 +81,21 @@ export interface PlaybackSessionBody {
  * Response of `POST /playback/sessions`: 200 direct (no session) or 201 HLS session.
  * `offsetSec` is the media time at which the player's timeline starts: 0 for direct play
  * (the web seeks itself), `startSec` for HLS (FFmpeg started there, ADR-0007 §2).
+ * `startSec` is the effective resume point: 0 when the asked one was at or past the end.
  */
 export type PlaybackStart =
   | {
       readonly mode: 'direct';
       readonly url: string;
       readonly mime: string;
+      readonly startSec: number;
       readonly offsetSec: number;
     }
   | {
       readonly mode: 'hls';
       readonly sessionId: string;
       readonly url: string;
+      readonly startSec: number;
       readonly offsetSec: number;
     };
 

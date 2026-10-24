@@ -66,6 +66,7 @@ export function registerSessionRoutes(app: FastifyInstance, deps: SessionRoutesD
         mode: 'direct',
         url: `/media/${mediaId}/file`,
         mime,
+        startSec,
         offsetSec: 0,
       };
       return reply.code(200).send(direct);
@@ -82,6 +83,7 @@ export function registerSessionRoutes(app: FastifyInstance, deps: SessionRoutesD
       mode: 'hls',
       sessionId: result.id,
       url: `/playback/sessions/${result.id}/${PLAYLIST_NAME}`,
+      startSec,
       offsetSec: startSec,
     };
     return reply.code(201).send(hls);

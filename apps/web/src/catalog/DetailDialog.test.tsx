@@ -24,12 +24,13 @@ const always: CanPlay = () => 'probably';
 /** A server double: confirms direct play when asked, answers busy for HLS (no hls.js here). */
 function fakeApi(): PlaybackApi & { start: ReturnType<typeof vi.fn> } {
   return {
-    start: vi.fn(async ({ mediaId, directPlay }: PlaybackSessionBody) =>
+    start: vi.fn(async ({ mediaId, directPlay, startSec = 0 }: PlaybackSessionBody) =>
       directPlay
         ? {
             mode: 'direct' as const,
             url: `/api/media/${mediaId}/file`,
             mime: 'video/mp4',
+            startSec,
             offsetSec: 0,
           }
         : ('busy' as const),

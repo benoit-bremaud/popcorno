@@ -41,7 +41,8 @@ Primary key `(profile_id, media_id)`: one row per profile and title, upserted.
 - `GET /progress` → `200 WatchProgress[]`, every row of the `default` profile:
   `{ mediaId, positionSec, durationSec, finished, updatedAt }`, newest first.
 - `POST /playback/sessions` body gains `startSec?: integer ≥ 0` (default 0). Both
-  answers gain `offsetSec`, the media time at which the player's timeline starts:
+  answers gain `startSec`, the effective resume point (0 when the asked one is at or past
+  the end, 4b), and `offsetSec`, the media time at which the player's timeline starts:
   - direct → `offsetSec: 0`; the web seeks the `<video>` to `startSec` itself;
   - HLS → FFmpeg gets `-ss startSec` before `-i`; `offsetSec: startSec`.
 
@@ -70,7 +71,7 @@ Main scenario:
 3. The web posts `{ mediaId, directPlay, startSec: 754 }`.
 4. The server answers direct (`offsetSec: 0`) or opens an HLS session whose FFmpeg
    starts at 754 s (`offsetSec: 754`).
-5. The web seeks to `startSec − offsetSec` once metadata is loaded, then plays.
+5. The web seeks to the answer's `startSec − offsetSec` once metadata is loaded, then plays.
 6. Every 10 s while playing, on pause and on close, the web sends `PUT
    /media/:id/progress` with `offsetSec + currentTime`.
 7. The viewer closes the player; the last position is saved (`keepalive`) and, once that
@@ -89,6 +90,7 @@ Extensions:
 - 5a. Nothing is saved before `loadedmetadata` and the resume seek, so an early close or
   pause cannot overwrite the saved position with 0.
 - 6a. A save fails (network) → ignored; the next one carries the newer position.
+- 6c. Saves are queued one after another, so an older position can never land last.
 - 6b. The title is deleted by a re-scan → its rows go with it (cascade).
 
 ## 4. UC7 — Play the next episode

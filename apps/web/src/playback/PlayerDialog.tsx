@@ -125,15 +125,21 @@ export function PlayerDialog({
     return offsetSec + Math.floor(element.currentTime);
   }
 
+  /** Saves run one after another, so an older position can never land last. */
+  const saves = useRef<Promise<void>>(Promise.resolve());
+
   function save(): Promise<void> {
     const at = position();
-    return at === null ? Promise.resolve() : api.save(item.id, at);
+    if (at === null) return saves.current;
+    saves.current = saves.current.then(() => api.save(item.id, at));
+    return saves.current;
   }
 
   /** Direct play seeks in the file; an HLS session already starts at the offset. */
   function seekToStart(): void {
     const element = video.current;
-    const seek = startSec - offsetSec;
+    // The server's effective start: it starts over when the asked one is past the end.
+    const seek = (start?.startSec ?? startSec) - offsetSec;
     if (element !== null && seek > 0) element.currentTime = seek;
     positioned.current = true;
   }

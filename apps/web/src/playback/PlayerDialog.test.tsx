@@ -11,12 +11,14 @@ const HLS: PlaybackStart = {
   mode: 'hls',
   sessionId: 's1',
   url: '/api/playback/sessions/s1/index.m3u8',
+  startSec: 0,
   offsetSec: 0,
 };
 const DIRECT: PlaybackStart = {
   mode: 'direct',
   url: '/api/media/heat/file',
   mime: 'video/mp4',
+  startSec: 0,
   offsetSec: 0,
 };
 const heat = media({ id: 'heat', title: 'Heat' });
@@ -26,7 +28,7 @@ function fakeApi(result: Awaited<ReturnType<PlaybackApi['start']>>) {
     start: vi.fn(async () => result),
     heartbeat: vi.fn(async () => undefined),
     stop: vi.fn(async () => undefined),
-    save: vi.fn(async () => undefined),
+    save: vi.fn<PlaybackApi['save']>(async () => undefined),
   };
 }
 
@@ -229,7 +231,7 @@ async function videoOf(): Promise<HTMLVideoElement> {
 
 describe('PlayerDialog resume and progress', () => {
   it('asks for the resume offset and seeks a direct-played file to it', async () => {
-    const api = fakeApi(DIRECT);
+    const api = fakeApi({ ...DIRECT, startSec: 754 });
     render(<PlayerDialog item={heat} directPlay startSec={754} onClose={vi.fn()} api={api} />);
     const element = await videoOf();
 
@@ -240,7 +242,7 @@ describe('PlayerDialog resume and progress', () => {
   });
 
   it('does not seek an HLS stream that already starts at the offset, and saves absolute time', async () => {
-    const api = fakeApi({ ...HLS, offsetSec: 754 });
+    const api = fakeApi({ ...HLS, startSec: 754, offsetSec: 754 });
     render(
       <PlayerDialog
         item={heat}
@@ -258,7 +260,50 @@ describe('PlayerDialog resume and progress', () => {
     element.currentTime = 12.7;
     fireEvent.pause(element);
 
-    expect(api.save).toHaveBeenCalledWith('heat', 766);
+    await waitFor(() => expect(api.save).toHaveBeenCalledWith('heat', 766));
+  });
+
+  it('honours the server starting over instead of the asked offset', async () => {
+    render(
+      <PlayerDialog
+        item={heat}
+        directPlay
+        startSec={754}
+        onClose={vi.fn()}
+        api={fakeApi(DIRECT)}
+      />,
+    );
+    const element = await videoOf();
+
+    fireEvent.loadedMetadata(element);
+
+    expect(element.currentTime).toBe(0);
+  });
+
+  it('runs saves one after another so an older one never lands last', async () => {
+    const api = fakeApi(DIRECT);
+    let release: () => void = () => undefined;
+    const order: number[] = [];
+    api.save
+      .mockImplementationOnce(async (_id: string, at: number) => {
+        await new Promise<void>((done) => (release = done));
+        order.push(at);
+      })
+      .mockImplementation(async (_id: string, at: number) => {
+        order.push(at);
+      });
+    render(<PlayerDialog item={heat} directPlay onClose={vi.fn()} api={api} />);
+    const element = await videoOf();
+    fireEvent.loadedMetadata(element);
+
+    element.currentTime = 10;
+    fireEvent.pause(element);
+    element.currentTime = 20;
+    fireEvent.pause(element);
+    await waitFor(() => expect(api.save).toHaveBeenCalledOnce());
+    await act(async () => release());
+
+    await waitFor(() => expect(order).toEqual([10, 20]));
   });
 
   it('saves the position when the player closes', async () => {
@@ -284,10 +329,10 @@ describe('PlayerDialog resume and progress', () => {
     fireEvent.loadedMetadata(element);
     element.currentTime = 5;
 
-    act(() => vi.advanceTimersByTime(10_000));
+    await act(async () => vi.advanceTimersByTime(10_000));
     expect(api.save).not.toHaveBeenCalled();
     paused = false;
-    act(() => vi.advanceTimersByTime(10_000));
+    await act(async () => vi.advanceTimersByTime(10_000));
 
     expect(api.save).toHaveBeenCalledOnce();
     expect(api.save).toHaveBeenCalledWith('heat', 5);

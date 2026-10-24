@@ -107,6 +107,7 @@ describe('playback session routes', () => {
       mode: 'direct',
       url: `/media/${media.id}/file`,
       mime: 'video/mp4; codecs="avc1.640028, mp4a.40.2"',
+      startSec: 0,
       offsetSec: 0,
     });
     expect(spawned).toHaveLength(0);
@@ -150,7 +151,7 @@ describe('playback session routes', () => {
 
     const response = await start(media.id, false, 60);
 
-    expect(response.json<PlaybackStart>().offsetSec).toBe(0);
+    expect(response.json<PlaybackStart>()).toMatchObject({ startSec: 0, offsetSec: 0 });
     expect(spawned[0]).not.toContain('-ss');
   });
 
@@ -159,7 +160,7 @@ describe('playback session routes', () => {
 
     const response = await start(media.id, true, 42);
 
-    expect(response.json<PlaybackStart>().offsetSec).toBe(0);
+    expect(response.json<PlaybackStart>()).toMatchObject({ startSec: 42, offsetSec: 0 });
   });
 
   it.each([-1, 1.5, 'x', 7 * 86_400 + 1])('rejects the start offset %s', async (startSec) => {
