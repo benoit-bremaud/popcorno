@@ -503,11 +503,6 @@
   margin: 0 0 var(--space-4);
 }
 
-.detail__unplayable {
-  margin: 0 0 var(--space-4);
-  font-size: var(--text-sm);
-}
-
 .detail__episode-play {
   margin-left: var(--space-2);
 }
@@ -543,4 +538,8 @@
 
 .player__error {
   color: var(--color-text-muted);
+}
+
+.player__status {
+  font-size: var(--text-sm);
 }

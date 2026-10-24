@@ -67,3 +67,15 @@ export function decidePlayback(
   if (mime === null || canPlay(mime) === '') return UNSUPPORTED;
   return { mode: 'direct', mime };
 }
+
+/** Body of `POST /playback/sessions` (spec hls-transcode §2.1, ADR-0006 §6). */
+export interface PlaybackSessionBody {
+  readonly mediaId: string;
+  /** The browser's own `decidePlayback(...).mode === 'direct'`; the server confirms it. */
+  readonly directPlay: boolean;
+}
+
+/** Response of `POST /playback/sessions`: 200 direct (no session) or 201 HLS session. */
+export type PlaybackStart =
+  | { readonly mode: 'direct'; readonly url: string; readonly mime: string }
+  | { readonly mode: 'hls'; readonly sessionId: string; readonly url: string };

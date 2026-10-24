@@ -22,6 +22,7 @@ interface FfprobeStream {
   readonly width?: number;
   readonly height?: number;
   readonly tags?: { readonly language?: string };
+  readonly disposition?: { readonly attached_pic?: number };
 }
 
 interface FfprobeOutput {
@@ -55,6 +56,8 @@ export function parseFfprobeOutput(output: FfprobeOutput): ProbeResult {
   for (const stream of output.streams ?? []) {
     const type = stream.codec_type;
     if (type !== 'video' && type !== 'audio' && type !== 'subtitle') continue;
+    // Cover art is a still picture, not the title's video (FFmpeg maps `0:V:0` too).
+    if (stream.disposition?.attached_pic === 1) continue;
     streams.push({
       type,
       codec: stream.codec_name ?? 'unknown',

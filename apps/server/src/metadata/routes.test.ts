@@ -62,6 +62,10 @@ describe('metadata routes', () => {
       mediaRoot,
       tmdb,
       artworkDir,
+      transcoder: () => {
+        throw new Error('FFmpeg is not used by this suite');
+      },
+      transcodeDir: tmpdir(),
     });
   });
 
@@ -263,6 +267,10 @@ describe('metadata routes', () => {
         mediaRoot,
         tmdb: null,
         artworkDir,
+        transcoder: () => {
+          throw new Error('FFmpeg is not used by this suite');
+        },
+        transcodeDir: tmpdir(),
       });
     });
 

@@ -15,6 +15,10 @@ describe('buildApp', () => {
       mediaRoot: tmpdir(),
       tmdb: null,
       artworkDir: tmpdir(),
+      transcoder: () => {
+        throw new Error('FFmpeg is not used by this suite');
+      },
+      transcodeDir: tmpdir(),
     });
   });
 

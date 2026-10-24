@@ -9,6 +9,11 @@ export interface ServerConfig {
   /** Absolute folder every library root must live under (`POST /libraries` rejects the rest). */
   readonly mediaRoot: string;
   readonly ffprobePath: string;
+  readonly ffmpegPath: string;
+  /** Absolute parent of the HLS session directories; leftover `session-*` ones are removed at start. */
+  readonly transcodeDir: string;
+  /** HLS sessions allowed at once; one more gets `503 transcode_busy`. */
+  readonly transcodeMaxSessions: number;
   /** TMDB API Read Access Token (sent as Bearer); null disables UC2 (ADR-0003). Never logged. */
   readonly tmdbApiKey: string | null;
   /** `language` sent on every TMDB request, e.g. `en-US`, `fr-FR`. */
@@ -29,9 +34,18 @@ export function loadConfig(env: NodeJS.ProcessEnv): ServerConfig {
     databasePath: env['DATABASE_PATH'] ?? 'data/popcorno.sqlite',
     mediaRoot: resolve(env['MEDIA_ROOT'] ?? 'media'),
     ffprobePath: env['FFPROBE_PATH'] ?? 'ffprobe',
+    ffmpegPath: env['FFMPEG_PATH'] ?? 'ffmpeg',
+    transcodeDir: resolve(env['TRANSCODE_DIR'] ?? 'data/transcode'),
+    transcodeMaxSessions: positiveInteger(env['TRANSCODE_MAX_SESSIONS'], 1),
     // The .env.example placeholder must not count as a key.
     tmdbApiKey: tmdbApiKey && tmdbApiKey !== TMDB_PLACEHOLDER ? tmdbApiKey : null,
     tmdbLanguage: env['TMDB_LANGUAGE'] ?? 'en-US',
     artworkDir: resolve(env['ARTWORK_DIR'] ?? 'data/artwork'),
   };
+}
+
+/** A finite integer ≥ 1, else the fallback: the session limit guards CPU and disk. */
+function positiveInteger(value: string | undefined, fallback: number): number {
+  const n = Number(value);
+  return Number.isSafeInteger(n) && n >= 1 ? n : fallback;
 }

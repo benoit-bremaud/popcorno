@@ -1,33 +1,39 @@
 # State diagram — playback — PlaybackSession lifecycle
 
-> **Feature**: UC5 Watch a title
-> **Related ADRs**: ADR-0001
+> **Feature**: UC5 Watch a title — [spec](../../specs/hls-transcode.md)
+> **Related ADRs**: ADR-0001, ADR-0006
 
 ## Context
 
-A server-side playback session exists only for transcoded playback (direct play is
-stateless Range serving). Its lifecycle bounds the FFmpeg process.
+A server-side session exists only for HLS playback (direct play is stateless Range
+serving). It lives in memory in the `SessionManager` and bounds one FFmpeg process and
+one temp directory.
 
 ## Diagram
 
 ```mermaid
 stateDiagram-v2
-  [*] --> Requested: POST /playback/sessions
-  Requested --> Direct: decider says direct play
-  Requested --> Starting: decider says transcode
-  Starting --> Streaming: first segment written
-  Starting --> Failed: ffmpeg exits non-zero
-  Streaming --> Streaming: segment requested
-  Streaming --> Idle: no request for 60 s
-  Idle --> Streaming: segment requested
-  Idle --> Closed: watchdog timeout
+  [*] --> Starting: POST /playback/sessions (HLS, under the limit)
+  Starting --> Streaming: index.m3u8 written
+  Starting --> Failed: ffmpeg exits or 20 s without playlist
+  state Streaming {
+    [*] --> Encoding
+    Encoding --> Complete: ffmpeg exits 0 (#EXT-X-ENDLIST)
+    Encoding --> Crashed: ffmpeg exits non-zero
+  }
+  Streaming --> Streaming: playlist / segment / heartbeat (idle timer reset)
   Streaming --> Closed: DELETE session
-  Direct --> [*]
-  Failed --> [*]
-  Closed --> [*]: ffmpeg killed, cache dir removed
+  Streaming --> Closed: 60 s without request (watchdog)
+  Streaming --> Closed: server shutdown
+  Failed --> [*]: 502 transcode_failed, dir removed
+  Closed --> [*]: ffmpeg killed, dir removed
 ```
 
 ## Notes
 
-- `Direct` terminates immediately: the session record is only an audit line.
-- `Idle → Closed` is the safety net against players that never send DELETE (tab closed).
+- Once `Closed`, the id is forgotten: later requests get `404 session_not_found`.
+- `Complete` and `Crashed` keep serving what was written; a crash surfaces in the
+  player through hls.js when a missing segment is requested.
+- The heartbeat (every 20 s from the open player) keeps a paused session alive; a closed
+  tab stops it and the watchdog cleans up.
+- `Failed` and `Closed` free a slot of `TRANSCODE_MAX_SESSIONS`.

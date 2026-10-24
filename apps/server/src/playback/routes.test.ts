@@ -31,6 +31,10 @@ describe('GET /media/:id/file', () => {
       mediaRoot,
       tmdb: null,
       artworkDir: join(base, 'artwork'),
+      transcoder: () => {
+        throw new Error('FFmpeg is not used by this suite');
+      },
+      transcodeDir: tmpdir(),
     });
   });
 
