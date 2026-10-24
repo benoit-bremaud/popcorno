@@ -103,5 +103,3 @@ Extensions:
 - hls.js is loaded with a dynamic `import()` only for HLS sessions: the catalog bundle
   does not grow.
 - ADR-0004 tokens and motion; the player opens exactly as in #7.
-</content>
-</invoke>

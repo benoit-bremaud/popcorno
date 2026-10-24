@@ -82,7 +82,3 @@ sequenceDiagram
 - Playlist and segment routes never build a path from the URL without validating the
   name (`index.m3u8` or `segment-\d{5}.ts`) and joining it to the session's own dir.
 - Direct play keeps the #7 Range route untouched.
-</content>
-</invoke>
-<invoke name="Bash">
-<parameter name="command">cd docs/architecture && grep -n "Session\|sessions\|watchdog\|Transcod" diagrams/playback/03-component.md diagrams/playback/04-class.md | head -30; grep -n -i "transcode\|not playable" ../requirements/*.md specs/direct-play.md | head

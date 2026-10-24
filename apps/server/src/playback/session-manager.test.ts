@@ -212,13 +212,24 @@ describe('SessionManager', () => {
   });
 
   it('cleans only the session directories a previous run left', async () => {
-    await mkdir(join(dir, 'session-old'), { recursive: true });
+    await mkdir(join(dir, 'session-a1B2c3'), { recursive: true });
+    writeFileSync(join(dir, 'session-a1B2c3', 'index.m3u8'), '');
+    writeFileSync(join(dir, 'session-a1B2c3', 'segment-00000.ts.tmp'), '');
     await mkdir(join(dir, 'keep-me'));
+    await mkdir(join(dir, 'session-notes'));
+    await mkdir(join(dir, 'session-x9y8z7'));
+    writeFileSync(join(dir, 'session-x9y8z7', 'thesis.docx'), '');
+    writeFileSync(join(dir, 'session-f0f0f0'), 'a file, not a directory');
     const sessions = manager(fakeTranscoder('writes').transcoder);
 
     await sessions.clean();
 
-    expect(await readdir(dir)).toEqual(['keep-me']);
+    expect((await readdir(dir)).sort()).toEqual([
+      'keep-me',
+      'session-f0f0f0',
+      'session-notes',
+      'session-x9y8z7',
+    ]);
   });
 
   it('cleans nothing when the directory does not exist yet', async () => {

@@ -141,6 +141,4 @@ browser's `directPlay` answer and starts the session itself.
 - HEVC 4K is transcoded on CPU and scaled to 1080p: may be slower than real time on weak
   hosts; hardware encoding is a follow-up.
 - One extra round trip before direct play.
-- Sessions are lost on restart, by design; the temp root is wiped at start.
-</content>
-</invoke>
+- Sessions are lost on restart, by design; the session directories a previous run left are removed at start.

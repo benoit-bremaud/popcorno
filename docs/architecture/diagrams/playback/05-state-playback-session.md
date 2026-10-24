@@ -37,5 +37,3 @@ stateDiagram-v2
 - The heartbeat (every 20 s from the open player) keeps a paused session alive; a closed
   tab stops it and the watchdog cleans up.
 - `Failed` and `Closed` free a slot of `TRANSCODE_MAX_SESSIONS`.
-</content>
-</invoke>

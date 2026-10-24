@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { Dirent } from 'node:fs';
 import { access, mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -38,6 +39,8 @@ interface Session {
 
 /** Directory names `open` creates under `dir`; `clean` removes only these. */
 const SESSION_PREFIX = 'session-';
+/** `mkdtemp` appends six random characters to the prefix. */
+const SESSION_DIR = /^session-[\w-]{6}$/;
 
 const IDLE_MS = 60_000;
 const READY_TIMEOUT_MS = 20_000;
@@ -153,18 +156,27 @@ export class SessionManager {
   }
 
   /**
-   * Removes leftovers of a previous run: only the `session-*` directories, so a
-   * misconfigured `TRANSCODE_DIR` never wipes anything else.
+   * Removes leftovers of a previous run: only directories named like `mkdtemp` made them
+   * and holding nothing but FFmpeg output, so a misconfigured `TRANSCODE_DIR` never
+   * wipes anything else.
    */
   async clean(): Promise<void> {
-    let names: string[];
+    let entries: Dirent[];
     try {
-      names = await readdir(this.options.dir);
+      entries = await readdir(this.options.dir, { withFileTypes: true });
     } catch {
       return;
     }
-    const leftovers = names.filter((name) => name.startsWith(SESSION_PREFIX));
-    await Promise.all(leftovers.map((name) => this.remove(join(this.options.dir, name))));
+    const candidates = entries.filter(
+      (entry) => entry.isDirectory() && SESSION_DIR.test(entry.name),
+    );
+    const owned = await Promise.all(
+      candidates.map(async (entry) => {
+        const dir = join(this.options.dir, entry.name);
+        return (await holdsOnlyFfmpegOutput(dir)) ? dir : null;
+      }),
+    );
+    await Promise.all(owned.flatMap((dir) => (dir ? [this.remove(dir)] : [])));
   }
 
   /**
@@ -182,5 +194,18 @@ export class SessionManager {
   /** Server shutdown: every session is closed (`close` never rejects). */
   async closeAll(): Promise<void> {
     await Promise.all([...this.sessions.keys()].map((id) => this.close(id)));
+  }
+}
+
+/** True when every entry is a playlist or segment FFmpeg writes (`.tmp` while in flight). */
+async function holdsOnlyFfmpegOutput(dir: string): Promise<boolean> {
+  try {
+    const names = await readdir(dir);
+    return names.every((name) => {
+      const final = name.endsWith('.tmp') ? name.slice(0, -'.tmp'.length) : name;
+      return final === PLAYLIST_NAME || SEGMENT_PATTERN.test(final);
+    });
+  } catch {
+    return false;
   }
 }
