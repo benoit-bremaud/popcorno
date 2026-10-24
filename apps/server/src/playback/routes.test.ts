@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import type { ApiError, Library, Media } from '@popcorno/shared';
+import type { ApiError, Library, Media } from '@popcorntv/shared';
 import { buildApp } from '../app.js';
 import { openDatabase } from '../db/index.js';
 
@@ -17,7 +17,7 @@ describe('GET /media/:id/file', () => {
   let root: string;
 
   beforeEach(async () => {
-    base = await mkdtemp(join(tmpdir(), 'popcorno-playback-'));
+    base = await mkdtemp(join(tmpdir(), 'popcorntv-playback-'));
     mediaRoot = join(base, 'media');
     root = join(mediaRoot, 'films');
     await mkdir(root, { recursive: true });

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyBaseLogger } from 'fastify';
-import type { StreamInfo } from '@popcorno/shared';
+import type { StreamInfo } from '@popcorntv/shared';
 import { SessionManager } from './session-manager.js';
 import type { SessionManagerOptions } from './session-manager.js';
 import type { ExitListener, Transcoder } from './transcoder.js';
@@ -41,7 +41,7 @@ describe('SessionManager', () => {
   let warn: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
-    dir = join(await mkdtemp(join(tmpdir(), 'popcorno-sessions-')), 'transcode');
+    dir = join(await mkdtemp(join(tmpdir(), 'popcorntv-sessions-')), 'transcode');
     warn = vi.fn();
   });
 

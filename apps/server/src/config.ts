@@ -31,7 +31,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): ServerConfig {
   return {
     port: Number(env['PORT'] ?? 3000),
     host: env['HOST'] ?? '127.0.0.1',
-    databasePath: env['DATABASE_PATH'] ?? 'data/popcorno.sqlite',
+    databasePath: env['DATABASE_PATH'] ?? 'data/popcorntv.sqlite',
     mediaRoot: resolve(env['MEDIA_ROOT'] ?? 'media'),
     ffprobePath: env['FFPROBE_PATH'] ?? 'ffprobe',
     ffmpegPath: env['FFMPEG_PATH'] ?? 'ffmpeg',

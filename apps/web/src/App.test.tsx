@@ -15,7 +15,7 @@ describe('App', () => {
 
     render(<App />);
 
-    expect(screen.getByRole('heading', { name: 'Popcorno', level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'PopCornTV', level: 1 })).toBeInTheDocument();
     expect(await screen.findByText(/Nothing to show yet/)).toBeInTheDocument();
   });
 });

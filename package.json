@@ -1,5 +1,5 @@
 {
-  "name": "popcorno",
+  "name": "popcorntv",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -15,8 +15,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "dev:server": "pnpm --filter @popcorno/shared build && pnpm --filter @popcorno/server dev",
-    "dev:web": "pnpm --filter @popcorno/web dev"
+    "dev:server": "pnpm --filter @popcorntv/shared build && pnpm --filter @popcorntv/server dev",
+    "dev:web": "pnpm --filter @popcorntv/web dev"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

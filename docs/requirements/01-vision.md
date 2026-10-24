@@ -1,4 +1,4 @@
-# Vision — Popcorno
+# Vision — PopCornTV
 
 ## Problem
 
@@ -9,7 +9,7 @@ service.
 
 ## Product
 
-Popcorno is a self-hosted media server with a web player. It scans the owner's media
+PopCornTV is a self-hosted media server with a web player. It scans the owner's media
 folders, enriches them with metadata, and lets each household member browse and watch
 from a browser — on the LAN first, over the internet later.
 
@@ -18,7 +18,7 @@ feature is ever part of the product.
 
 Other tools on the same server (e.g. Radarr / Sonarr / Lidarr organising folders, Seerr
 for requests) may **coexist**: whatever lands in a library folder is picked up by the
-next scan. Popcorno never calls them (owner decision 2026-10-23, MCDA in the #5 chat:
+next scan. PopCornTV never calls them (owner decision 2026-10-23, MCDA in the #5 chat:
 coexistence 450 / read-only integration 380 / full integration 170).
 
 ## Borrowed strengths

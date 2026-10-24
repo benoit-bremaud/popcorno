@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ApiError, ApiErrorCode, Library } from '@popcorno/shared';
+import type { ApiError, ApiErrorCode, Library } from '@popcorntv/shared';
 import type { LibraryRepository } from './library/repository.js';
 
 /** Helpers shared by every route module: library lookup and error bodies. */

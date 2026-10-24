@@ -1,4 +1,4 @@
-import type { WatchProgress } from '@popcorno/shared';
+import type { WatchProgress } from '@popcorntv/shared';
 
 /** A few seconds of play are not worth a resume offer (spec resume-playback §2.4). */
 export const MIN_RESUME_SEC = 10;

@@ -14,7 +14,7 @@ Documentaries are recognisable (TMDB genre 99 among the genres).
 
 ## Scope and level
 
-System (Popcorno server). User-goal level.
+System (PopCornTV server). User-goal level.
 
 ## Primary actor
 

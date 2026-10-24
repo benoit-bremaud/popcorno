@@ -1,4 +1,4 @@
-# Architecture — Popcorno
+# Architecture — PopCornTV
 
 Docs-as-code, organised by zoom level (C4) with UML 2.5 diagrams in Mermaid and MADR
 decision records. The conception is the source of truth; code conforms to it.
@@ -7,10 +7,10 @@ decision records. The conception is the source of truth; code conforms to it.
 
 ```mermaid
 flowchart LR
-  Viewer((Viewer)) -->|"browse, watch (browser)"| Popcorno["Popcorno (server + web player)"]
-  Owner((Owner)) -->|"configure libraries, profiles"| Popcorno
-  Popcorno -->|"titles, artwork"| TMDB[("TMDB API")]
-  Popcorno -->|"read files"| Media[("Media folders")]
+  Viewer((Viewer)) -->|"browse, watch (browser)"| PopCornTV["PopCornTV (server + web player)"]
+  Owner((Owner)) -->|"configure libraries, profiles"| PopCornTV
+  PopCornTV -->|"titles, artwork"| TMDB[("TMDB API")]
+  PopCornTV -->|"read files"| Media[("Media folders")]
 ```
 
 ## Containers (C4 level 2)

@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Popcorno server image: builds the TypeScript workspace, ships only the runtime output,
+# PopCornTV server image: builds the TypeScript workspace, ships only the runtime output,
 # runs as a non-root user with FFmpeg available for transcoding.
 
 FROM node:22.21.1-bookworm-slim AS build
@@ -14,13 +14,13 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/
 COPY apps/server/package.json apps/server/
-RUN pnpm install --frozen-lockfile --filter @popcorno/server...
+RUN pnpm install --frozen-lockfile --filter @popcorntv/server...
 COPY packages/shared packages/shared
 COPY apps/server apps/server
 # --legacy: pnpm 10 only deploys injected workspaces by default; the workspace keeps plain
 # links so edits to packages/shared are seen live in dev (no injected hard-link copies).
-RUN pnpm --filter @popcorno/server... build \
-  && pnpm --filter @popcorno/server --prod deploy --legacy /out
+RUN pnpm --filter @popcorntv/server... build \
+  && pnpm --filter @popcorntv/server --prod deploy --legacy /out
 
 FROM node:22.21.1-bookworm-slim
 # ffmpeg comes from Debian stable: pinned by the base image tag, patched by Dependabot bumps.

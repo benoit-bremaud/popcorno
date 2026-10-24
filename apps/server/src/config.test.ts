@@ -7,7 +7,7 @@ describe('loadConfig', () => {
     expect(loadConfig({})).toEqual({
       port: 3000,
       host: '127.0.0.1',
-      databasePath: 'data/popcorno.sqlite',
+      databasePath: 'data/popcorntv.sqlite',
       mediaRoot: resolve('media'),
       ffprobePath: 'ffprobe',
       ffmpegPath: 'ffmpeg',

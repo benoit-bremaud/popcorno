@@ -1,4 +1,4 @@
-# Local review — popcorno (issue #9 resume playback)
+# Local review — popcorntv (issue #9 resume playback)
 
 - Date: 2026-10-24
 - Commit reviewed: 41cfe9d · fixes: `fix(playback): apply the #9 local review`

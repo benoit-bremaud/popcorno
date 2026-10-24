@@ -1,4 +1,4 @@
-import type { CastMember, Genre } from '@popcorno/shared';
+import type { CastMember, Genre } from '@popcorntv/shared';
 import type { TmdbCandidate, TmdbEpisode, TmdbTitleDetails } from './tmdb-client.js';
 
 /**

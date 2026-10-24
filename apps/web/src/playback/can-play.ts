@@ -1,4 +1,4 @@
-import type { CanPlay } from '@popcorno/shared';
+import type { CanPlay } from '@popcorntv/shared';
 
 let probe: HTMLVideoElement | null = null;
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { StreamInfo } from '@popcorno/shared';
+import type { StreamInfo } from '@popcorntv/shared';
 import { SEGMENT_PATTERN, ffmpegArgs } from './ffmpeg-args.js';
 
 function stream(type: StreamInfo['type'], codec: string): StreamInfo {

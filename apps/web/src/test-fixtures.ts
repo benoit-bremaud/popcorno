@@ -1,4 +1,4 @@
-import type { Genre, Media, MediaMetadata } from '@popcorno/shared';
+import type { Genre, Media, MediaMetadata } from '@popcorntv/shared';
 
 export const ACTION: Genre = { id: 28, name: 'Action' };
 export const DRAMA: Genre = { id: 18, name: 'Drama' };

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import type { Media } from '@popcorno/shared';
+import type { Media } from '@popcorntv/shared';
 import { artworkUrl, loadCatalog } from '../api.js';
 import {
   availableGenres,

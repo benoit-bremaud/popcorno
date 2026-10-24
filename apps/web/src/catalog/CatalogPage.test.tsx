@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import type { Media } from '@popcorno/shared';
+import type { Media } from '@popcorntv/shared';
 import { ACTION, DOCUMENTARY, DRAMA, media, metadata } from '../test-fixtures.js';
 import { CatalogPage } from './CatalogPage.js';
 

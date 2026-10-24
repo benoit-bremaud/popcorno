@@ -1,11 +1,11 @@
-# Popcorno
+# PopCornTV
 
 Self-hosted media server and web player, built from scratch. Takes the best of Jellyfin
 (free, self-hosted, no cloud account), Plex (automatic library scan with posters, synopses
 and cast) and Netflix (row-based browsing, resume playback, next episode, one profile per
 person) — and nothing else.
 
-Popcorno serves **your own media files**. It ships no content source.
+PopCornTV serves **your own media files**. It ships no content source.
 
 ## Status
 
@@ -75,7 +75,7 @@ the API has no authentication yet. A scan never prunes rows while a sub-director
 unreadable or the root is empty (unmounted volume). File names follow the Plex / Jellyfin conventions (`Title (2019).mkv`,
 `Show/Season 01/Show S01E02.mkv`, optional `[tmdbid-…]` tags); the full list is in
 [docs/architecture/specs/library-scan.md](docs/architecture/specs/library-scan.md).
-Database migrations live in `apps/server/drizzle` (`pnpm --filter @popcorno/server exec
+Database migrations live in `apps/server/drizzle` (`pnpm --filter @popcorntv/server exec
 drizzle-kit generate` after a schema change) and are applied at server start.
 
 ## Documentation

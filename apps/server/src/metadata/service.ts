@@ -1,4 +1,4 @@
-import type { EnrichReport, EnrichTitle, Library } from '@popcorno/shared';
+import type { EnrichReport, EnrichTitle, Library } from '@popcorntv/shared';
 import { BACKDROP_SIZE, POSTER_SIZE } from './artwork-cache.js';
 import type { ArtworkCache } from './artwork-cache.js';
 import { pickMatch, toEpisodeInput, toMetadataInput } from './matcher.js';

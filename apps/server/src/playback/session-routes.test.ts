@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Mock } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import type { ApiError, Library, Media, PlaybackStart, StreamInfo } from '@popcorno/shared';
+import type { ApiError, Library, Media, PlaybackStart, StreamInfo } from '@popcorntv/shared';
 import { buildApp } from '../app.js';
 import { openDatabase } from '../db/index.js';
 import type { Transcoder } from './transcoder.js';
@@ -31,7 +31,7 @@ describe('playback session routes', () => {
   let spawned: (readonly string[])[];
 
   beforeEach(async () => {
-    base = await mkdtemp(join(tmpdir(), 'popcorno-sessions-routes-'));
+    base = await mkdtemp(join(tmpdir(), 'popcorntv-sessions-routes-'));
     const mediaRoot = join(base, 'media');
     root = join(mediaRoot, 'films');
     await mkdir(root, { recursive: true });

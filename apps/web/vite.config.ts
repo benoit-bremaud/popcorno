@@ -7,7 +7,7 @@ export default defineConfig({
   resolve: {
     // Bundle the shared sources directly: no `pnpm build` of packages/shared needed.
     alias: {
-      '@popcorno/shared': fileURLToPath(
+      '@popcorntv/shared': fileURLToPath(
         new URL('../../packages/shared/src/index.ts', import.meta.url),
       ),
     },

@@ -4,7 +4,7 @@ import { access, mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { FastifyBaseLogger } from 'fastify';
-import type { StreamInfo } from '@popcorno/shared';
+import type { StreamInfo } from '@popcorntv/shared';
 import { PLAYLIST_NAME, SEGMENT_PATTERN, ffmpegArgs } from './ffmpeg-args.js';
 import type { TranscodeHandle, Transcoder } from './transcoder.js';
 

@@ -1,4 +1,4 @@
-import type { Media } from '@popcorno/shared';
+import type { Media } from '@popcorntv/shared';
 import { artworkUrl } from '../api.js';
 
 type Props = {

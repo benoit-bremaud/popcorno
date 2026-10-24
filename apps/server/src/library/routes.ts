@@ -1,8 +1,8 @@
 import { isAbsolute, resolve } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { LIBRARY_KINDS } from '@popcorno/shared';
-import type { EnrichReport, Library, Media, ScanReport } from '@popcorno/shared';
+import { LIBRARY_KINDS } from '@popcorntv/shared';
+import type { EnrichReport, Library, Media, ScanReport } from '@popcorntv/shared';
 import { apiError, invalid, loadLibrary } from '../http.js';
 import { LibraryBusyError } from './lock.js';
 import type { LibraryLock } from './lock.js';

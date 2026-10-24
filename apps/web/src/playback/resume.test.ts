@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { WatchProgress } from '@popcorno/shared';
+import type { WatchProgress } from '@popcorntv/shared';
 import { formatPosition, resumeAt } from './resume.js';
 
 function progress(positionSec: number, finished = false): WatchProgress {

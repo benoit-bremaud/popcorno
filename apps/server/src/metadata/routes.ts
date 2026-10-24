@@ -1,7 +1,7 @@
 import fastifyStatic from '@fastify/static';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import type { EnrichReport } from '@popcorno/shared';
+import type { EnrichReport } from '@popcorntv/shared';
 import { apiError, invalid, loadLibrary } from '../http.js';
 import { LibraryBusyError } from '../library/lock.js';
 import type { LibraryLock } from '../library/lock.js';

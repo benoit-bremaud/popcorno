@@ -1,4 +1,4 @@
-import type { LibraryKind, ProviderIds } from '@popcorno/shared';
+import type { LibraryKind, ProviderIds } from '@popcorntv/shared';
 
 /**
  * Pure file-naming parser (ADR-0002) for the Plex / Jellyfin conventions listed in

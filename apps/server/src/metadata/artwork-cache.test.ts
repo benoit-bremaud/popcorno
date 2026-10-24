@@ -14,7 +14,7 @@ describe('ArtworkCache', () => {
   let dir: string;
 
   beforeEach(async () => {
-    dir = join(await mkdtemp(join(tmpdir(), 'popcorno-art-')), 'artwork');
+    dir = join(await mkdtemp(join(tmpdir(), 'popcorntv-art-')), 'artwork');
   });
 
   afterEach(async () => {

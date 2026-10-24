@@ -1,5 +1,5 @@
 {
-  "name": "@popcorno/web",
+  "name": "@popcorntv/web",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
-    "@popcorno/shared": "workspace:*",
+    "@popcorntv/shared": "workspace:*",
     "hls.js": "1.7.3",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
