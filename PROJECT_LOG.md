@@ -4,6 +4,32 @@ Chronological operational logbook (newest first). Complements `git log` with the
 context: merged PRs, decisions, tags, infra events. Not a release changelog — that is
 `CHANGELOG.md`.
 
+## 2026-10-24 — #8 HLS transcode (PR #29 merged, `76df1fd`)
+
+- **Conception** — spec `docs/architecture/specs/hls-transcode.md`, sequence 02 and state
+  05 refined, ADR-0006 with six owner-validated MCDA matrices: every Play posts
+  `/playback/sessions`, the server confirms direct play with `directPlayMime` or opens an
+  in-memory HLS session; H.264/AAC copied, the rest re-encoded; MPEG-TS EVENT playlist.
+- **Implementation** — pure `ffmpeg-args`, `transcoder` (only child-process egress), a
+  `SessionManager` (limit reserved before any await, 60 s idle watchdog, crash and close
+  cleanup, start-up removal of FFmpeg-owned `session-*` dirs only), session routes with a
+  name whitelist. Web: Play for every file with video, hls.js 1.7.3 loaded on demand and
+  preferred over native HLS (Chromium claims HLS it cannot demux), one session per player
+  (StrictMode-safe), 20 s heartbeat.
+- **Reviews** — local review: 4 Must fixed (session-limit race, `rm -rf` of a configurable
+  dir, S6819, stale docs). Codex: 9 findings over 5 rounds, 8 fixed (cover art in ffprobe +
+  re-probe migration 0003, integer session limit, even scaled height, owned-dir cleanup,
+  tool text leaked into four docs, native HLS errors), 1 deferred to #28. CodeQL
+  `js/missing-rate-limiting` on the `onReady` hook dismissed as a false positive (owner,
+  A 480).
+- **Gate** on `c67eef6` — 16 shared + 245 server + 67 web tests, coverage server 98.3 % /
+  web 100 % lines, SonarQube PASSED, gitleaks clean, CI 9/9. QA: real HEVC + AC-3 MKV via
+  HLS in Chromium and Firefox, close and idle cleanup verified
+  (`qa/2026-10-23-issue-8-hls-transcode/`). Squash-merged with owner approval.
+- **Filed** — #26 (*arr tools explanation session), #27 (rename to PopCornTV: .com for
+  sale, npm and GitHub names used by torrent projects), #28 (FFmpeg reaping on crash,
+  input check/open race).
+
 ## 2026-10-23 — #7 direct play (PR #22 merged, `aadad38`)
 
 - **Conception** — the spec `docs/architecture/specs/direct-play.md` and the sequence
