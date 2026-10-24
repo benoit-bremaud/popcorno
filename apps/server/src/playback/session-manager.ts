@@ -75,9 +75,11 @@ export class SessionManager {
 
   /**
    * Starts FFmpeg on a confined real path and resolves once its playlist exists. Creates
-   * one directory under `dir`, removed again on every failure path.
+   * one directory under `dir`, removed again on every failure path. `startSec` (media
+   * seconds, 0 = from the start) is the resume offset (ADR-0007 §2); the routes never pass
+   * one at or past the end of the file.
    */
-  async open(inputPath: string, streams: readonly StreamInfo[]): Promise<OpenResult> {
+  async open(inputPath: string, streams: readonly StreamInfo[], startSec = 0): Promise<OpenResult> {
     if (this.sessions.size + this.starting >= this.options.maxSessions) return { kind: 'busy' };
     // Reserved before the first await, so concurrent opens cannot both pass the limit.
     this.starting += 1;
@@ -88,7 +90,7 @@ export class SessionManager {
     } finally {
       this.starting -= 1;
     }
-    const args = ffmpegArgs(inputPath, streams, dir);
+    const args = ffmpegArgs(inputPath, streams, dir, startSec);
     if (args === null) {
       await this.remove(dir);
       return { kind: 'not_playable' };

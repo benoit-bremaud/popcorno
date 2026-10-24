@@ -1,4 +1,11 @@
-import type { Library, Media, PlaybackSessionBody, PlaybackStart } from '@popcorno/shared';
+import type {
+  Library,
+  Media,
+  PlaybackSessionBody,
+  PlaybackStart,
+  ProgressBody,
+  WatchProgress,
+} from '@popcorno/shared';
 
 /** Prefix the dev server (and the production reverse proxy) forwards to the API. */
 const API = '/api';
@@ -55,15 +62,14 @@ export type PlaybackStartError = 'busy' | 'failed';
  * starts an HLS session. URLs come back relative to the API and are prefixed here.
  */
 export async function startPlayback(
-  mediaId: string,
-  directPlay: boolean,
+  body: PlaybackSessionBody,
   fetchFn: Fetch = fetch,
 ): Promise<PlaybackStart | PlaybackStartError> {
   try {
     const response = await fetchFn(`${API}/playback/sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mediaId, directPlay } satisfies PlaybackSessionBody),
+      body: JSON.stringify(body),
     });
     if (response.status === 503) return 'busy';
     if (!response.ok) return 'failed';
@@ -95,5 +101,35 @@ export async function stopPlayback(sessionId: string, fetchFn: Fetch = fetch): P
     });
   } catch {
     // The idle watchdog is the safety net.
+  }
+}
+
+/**
+ * `PUT /media/:id/progress` (spec resume-playback §2.2); `keepalive` lets the last save
+ * leave while the player closes. A lost save is harmless: the next one is newer.
+ */
+export async function saveProgress(
+  mediaId: string,
+  positionSec: number,
+  fetchFn: Fetch = fetch,
+): Promise<void> {
+  try {
+    await fetchFn(`${API}/media/${encodeURIComponent(mediaId)}/progress`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ positionSec } satisfies ProgressBody),
+      keepalive: true,
+    });
+  } catch {
+    // Ignored on purpose (spec 6a).
+  }
+}
+
+/** `GET /progress`; an unreachable server simply means "nothing to resume". */
+export async function loadProgress(fetchFn: Fetch = fetch): Promise<WatchProgress[]> {
+  try {
+    return await getList<WatchProgress>(fetchFn, '/progress');
+  } catch {
+    return [];
   }
 }

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { directPlayMime } from '@popcorno/shared';
 import type { PlaybackStart } from '@popcorno/shared';
 import { apiError, invalid } from '../http.js';
+import { MAX_POSITION_SEC } from '../progress/routes.js';
 import type { LibraryRepository } from '../library/repository.js';
 import { PLAYLIST_NAME } from './ffmpeg-args.js';
 import { confinedPath } from './routes.js';
@@ -17,7 +18,11 @@ export interface SessionRoutesDeps {
   readonly mediaRoot: string;
 }
 
-const startBody = z.object({ mediaId: z.uuid(), directPlay: z.boolean() });
+const startBody = z.object({
+  mediaId: z.uuid(),
+  directPlay: z.boolean(),
+  startSec: z.int().min(0).max(MAX_POSITION_SEC).default(0),
+});
 const sessionParams = z.object({ id: z.uuid() });
 const fileParams = z.object({ id: z.uuid(), file: z.string() });
 
@@ -39,6 +44,8 @@ async function openOrNull(path: string): Promise<FileHandle | null> {
  * UC5 sessions (spec hls-transcode, ADR-0006): `POST /playback/sessions` (200 direct |
  * 201 hls | 400 | 404 `media_not_found` | 422 `not_playable` | 502 `transcode_failed` |
  * 503 `transcode_busy`), the playlist and segment files, the heartbeat and `DELETE`.
+ * UC6 (ADR-0007): the body's optional `startSec` resumes there (start over at or past the
+ * end) and both answers carry `offsetSec`, the media time the player's timeline starts at.
  */
 export function registerSessionRoutes(app: FastifyInstance, deps: SessionRoutesDeps): void {
   app.post('/playback/sessions', async (request, reply) => {
@@ -47,6 +54,9 @@ export function registerSessionRoutes(app: FastifyInstance, deps: SessionRoutesD
     const { mediaId, directPlay } = body.data;
     const stored = deps.repository.findMediaFile(mediaId);
     if (stored === null) return reply.code(404).send(apiError('media_not_found'));
+    // At or past the end, FFmpeg would write nothing and hold a slot: start over instead.
+    const pastEnd = stored.durationSec !== null && body.data.startSec >= stored.durationSec;
+    const startSec = pastEnd ? 0 : body.data.startSec;
     const streams = deps.repository.findMediaStreams(mediaId);
 
     // The browser's answer counts only for a file the shared rule calls direct-playable.
@@ -56,13 +66,15 @@ export function registerSessionRoutes(app: FastifyInstance, deps: SessionRoutesD
         mode: 'direct',
         url: `/media/${mediaId}/file`,
         mime,
+        startSec,
+        offsetSec: 0,
       };
       return reply.code(200).send(direct);
     }
 
     const input = await confinedPath(stored.filePath, stored.rootPath, deps.mediaRoot);
     if (input === null) return reply.code(404).send(apiError('media_not_found'));
-    const result = await deps.sessions.open(input, streams);
+    const result = await deps.sessions.open(input, streams, startSec);
     if (result.kind !== 'ready') {
       const { status, code } = START_ERRORS[result.kind];
       return reply.code(status).send(apiError(code));
@@ -71,6 +83,8 @@ export function registerSessionRoutes(app: FastifyInstance, deps: SessionRoutesD
       mode: 'hls',
       sessionId: result.id,
       url: `/playback/sessions/${result.id}/${PLAYLIST_NAME}`,
+      startSec,
+      offsetSec: startSec,
     };
     return reply.code(201).send(hls);
   });

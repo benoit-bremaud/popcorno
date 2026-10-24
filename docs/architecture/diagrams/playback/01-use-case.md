@@ -57,3 +57,4 @@ flowchart LR
 - UC2 is actor-initiated (the owner asks for a refresh); the scan's automatic metadata
   fetch is an «include» of UC1, not a use case of its own. Textual specs:
   [UC1](../../specs/library-scan.md), [UC2](../../specs/tmdb-metadata.md).
+- UC6 / UC7 textual spec: [resume-playback](../../specs/resume-playback.md).

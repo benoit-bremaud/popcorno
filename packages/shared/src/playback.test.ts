@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { StreamInfo } from './index.js';
-import { decidePlayback, directPlayMime } from './playback.js';
+import { decidePlayback, directPlayMime, isFinished } from './playback.js';
 
 function stream(type: StreamInfo['type'], codec: string): StreamInfo {
   return { type, codec, width: null, height: null, language: null };
@@ -82,5 +82,21 @@ describe('decidePlayback', () => {
     });
     expect(decision).toEqual({ mode: 'unsupported' });
     expect(asked).toBe(false);
+  });
+});
+
+describe('isFinished', () => {
+  it('is true from 90 % of the duration', () => {
+    expect(isFinished({ positionSec: 90, durationSec: 100 })).toBe(true);
+    expect(isFinished({ positionSec: 100, durationSec: 100 })).toBe(true);
+  });
+
+  it('is false just below 90 %', () => {
+    expect(isFinished({ positionSec: 89, durationSec: 100 })).toBe(false);
+  });
+
+  it('is never true without a positive duration', () => {
+    expect(isFinished({ positionSec: 5000, durationSec: null })).toBe(false);
+    expect(isFinished({ positionSec: 0, durationSec: 0 })).toBe(false);
   });
 });

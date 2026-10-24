@@ -198,14 +198,24 @@ export class LibraryRepository {
    * The stored real path of a file-backed media row and its library root, or null for an
    * unknown id or a `series` row (no file). Playback re-checks both against the disk.
    */
-  findMediaFile(id: string): { readonly filePath: string; readonly rootPath: string } | null {
+  findMediaFile(id: string): {
+    readonly filePath: string;
+    readonly rootPath: string;
+    readonly durationSec: number | null;
+  } | null {
     const row = this.db
-      .select({ filePath: media.filePath, rootPath: libraries.rootPath })
+      .select({
+        filePath: media.filePath,
+        rootPath: libraries.rootPath,
+        durationSec: media.durationSec,
+      })
       .from(media)
       .innerJoin(libraries, eq(libraries.id, media.libraryId))
       .where(eq(media.id, id))
       .get();
-    return row?.filePath ? { filePath: row.filePath, rootPath: row.rootPath } : null;
+    return row?.filePath
+      ? { filePath: row.filePath, rootPath: row.rootPath, durationSec: row.durationSec }
+      : null;
   }
 
   /** The streams of one media row in scan order (empty for an unknown id). */

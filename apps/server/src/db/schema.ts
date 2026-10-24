@@ -1,5 +1,13 @@
 import { sql } from 'drizzle-orm';
-import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import {
+  index,
+  integer,
+  primaryKey,
+  real,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core';
 import { LIBRARY_KINDS, MEDIA_KINDS, STREAM_TYPES } from '@popcorno/shared';
 import type { CastMember, Genre, ProviderIds } from '@popcorno/shared';
 
@@ -82,3 +90,23 @@ export const streams = sqliteTable('streams', {
   height: integer('height'),
   language: text('language'),
 });
+
+/** The only profile until #10 (ADR-0007 §1). */
+export const DEFAULT_PROFILE = 'default';
+
+/**
+ * Where a profile stopped in a title (`WatchProgress` entity, ADR-0007). One row per
+ * profile and media; every row belongs to `default` until profiles exist (#10).
+ */
+export const watchProgress = sqliteTable(
+  'watch_progress',
+  {
+    profileId: text('profile_id').notNull().default(DEFAULT_PROFILE),
+    mediaId: text('media_id')
+      .notNull()
+      .references(() => media.id, { onDelete: 'cascade' }),
+    positionSec: integer('position_sec').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.profileId, table.mediaId] })],
+);

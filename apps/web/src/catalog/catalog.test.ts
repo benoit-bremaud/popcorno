@@ -9,6 +9,7 @@ import {
   heroItem,
   homeRows,
   ofGenre,
+  nextEpisode,
   seasonsOf,
   topRated,
   typeOf,
@@ -171,5 +172,28 @@ describe('seasonsOf', () => {
 
   it('returns nothing for a film', () => {
     expect(seasonsOf(film, [episode])).toEqual([]);
+  });
+});
+
+describe('nextEpisode', () => {
+  const e1 = media({ id: 'e1', title: 'E1', kind: 'episode', season: 1, episode: 1 });
+  const e2 = media({ id: 'e2', title: 'E2', kind: 'episode', season: 1, episode: 2 });
+  const s2e1 = media({ id: 's2e1', title: 'S2E1', kind: 'episode', season: 2, episode: 1 });
+  const seasons = [
+    { season: 1, episodes: [e1, e2] },
+    { season: 2, episodes: [s2e1] },
+  ];
+
+  it('returns the following episode of the same season', () => {
+    expect(nextEpisode(seasons, e1)).toBe(e2);
+  });
+
+  it('crosses into the next season', () => {
+    expect(nextEpisode(seasons, e2)).toBe(s2e1);
+  });
+
+  it('returns null after the last episode or for a title outside the list', () => {
+    expect(nextEpisode(seasons, s2e1)).toBeNull();
+    expect(nextEpisode(seasons, media({ id: 'film', title: 'Film' }))).toBeNull();
   });
 });
