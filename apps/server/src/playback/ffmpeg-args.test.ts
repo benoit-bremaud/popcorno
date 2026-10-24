@@ -26,7 +26,7 @@ describe('ffmpegArgs', () => {
       ffmpegArgs('/m/a.mkv', [stream('video', 'HEVC'), stream('audio', 'ac3')], '/t') ?? [];
 
     expect(valueOf(args, '-c:v')).toBe('libx264');
-    expect(valueOf(args, '-vf')).toBe("scale=-2:'min(1080,ih)'");
+    expect(valueOf(args, '-vf')).toBe("scale=-2:'trunc(min(1080,ih)/2)*2'");
     expect(valueOf(args, '-force_key_frames')).toBe('expr:gte(t,n_forced*6)');
     expect(valueOf(args, '-c:a')).toBe('aac');
     expect(valueOf(args, '-ac')).toBe('2');

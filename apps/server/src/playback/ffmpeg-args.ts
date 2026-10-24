@@ -27,9 +27,9 @@ function videoArgs(video: StreamInfo): string[] {
     '23',
     '-pix_fmt',
     'yuv420p',
-    // Never upscale, cap at 1080 lines, keep an even width.
+    // Never upscale, cap at 1080 lines; yuv420p needs even width and height.
     '-vf',
-    "scale=-2:'min(1080,ih)'",
+    "scale=-2:'trunc(min(1080,ih)/2)*2'",
     // A keyframe at every segment boundary, so segments start decodable.
     '-force_key_frames',
     `expr:gte(t,n_forced*${SEGMENT_SECONDS})`,
