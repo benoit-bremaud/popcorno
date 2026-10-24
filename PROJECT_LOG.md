@@ -4,6 +4,24 @@ Chronological operational logbook (newest first). Complements `git log` with the
 context: merged PRs, decisions, tags, infra events. Not a release changelog — that is
 `CHANGELOG.md`.
 
+## 2026-10-24 — #9 resume playback (PR #32 merged, `2abd850`)
+
+- **Conception** — spec `docs/architecture/specs/resume-playback.md` (UC6 resume, UC7 next
+  episode), sequence `02-sequence-resume-a-title`, ADR-0007 with four owner-validated MCDA
+  matrices: `watch_progress` keyed by `profile_id` `'default'` until #10, FFmpeg `-ss`
+  before `-i` with `offsetSec` in the session answer, web `PUT` every 10 s / on pause / on
+  close, a Next episode button without autoplay.
+- **Implementation** — migration 0004, `progress/` repository + routes (`PUT
+  /media/:id/progress`, `GET /progress`), `startSec` on `POST /playback/sessions` (capped,
+  start over at or past the end). Web: Resume from m:ss + Start over, per-episode resume,
+  serialized saves, nothing saved before metadata + seek, Next episode at ≥ 90 % or `ended`.
+- **Reviews** — local review: 0 Must, 14 Should fixed. Codex: 2 P2 fixed (effective start,
+  save ordering), re-review clean. QA Chromium + Firefox: pass, 3 Nice fixed (episode names,
+  Next announced, spec 2a) (`qa/2026-10-24-resume-playback/`).
+- **Gate** on `874697d` — 19 shared + 270 server + 98 web tests, coverage server 98.3 % /
+  web 100 % lines, SonarQube PASSED, gitleaks clean, CI 6/6. Squash-merged with owner
+  approval. A transient GitHub HTTP 408/502 blocked the last push for a while.
+
 ## 2026-10-24 — #8 HLS transcode (PR #29 merged, `76df1fd`)
 
 - **Conception** — spec `docs/architecture/specs/hls-transcode.md`, sequence 02 and state
