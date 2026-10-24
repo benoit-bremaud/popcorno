@@ -36,10 +36,16 @@ export function loadConfig(env: NodeJS.ProcessEnv): ServerConfig {
     ffprobePath: env['FFPROBE_PATH'] ?? 'ffprobe',
     ffmpegPath: env['FFMPEG_PATH'] ?? 'ffmpeg',
     transcodeDir: resolve(env['TRANSCODE_DIR'] ?? 'data/transcode'),
-    transcodeMaxSessions: Math.max(1, Number(env['TRANSCODE_MAX_SESSIONS'] ?? 1) || 1),
+    transcodeMaxSessions: positiveInteger(env['TRANSCODE_MAX_SESSIONS'], 1),
     // The .env.example placeholder must not count as a key.
     tmdbApiKey: tmdbApiKey && tmdbApiKey !== TMDB_PLACEHOLDER ? tmdbApiKey : null,
     tmdbLanguage: env['TMDB_LANGUAGE'] ?? 'en-US',
     artworkDir: resolve(env['ARTWORK_DIR'] ?? 'data/artwork'),
   };
+}
+
+/** A finite integer ≥ 1, else the fallback: the session limit guards CPU and disk. */
+function positiveInteger(value: string | undefined, fallback: number): number {
+  const n = Number(value);
+  return Number.isSafeInteger(n) && n >= 1 ? n : fallback;
 }

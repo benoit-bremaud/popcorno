@@ -30,4 +30,15 @@ describe('parseFfprobeOutput', () => {
     });
     expect(parseFfprobeOutput({})).toEqual({ durationSec: null, streams: [] });
   });
+
+  it('skips attached pictures, so cover art is never taken for the video', () => {
+    const result = parseFfprobeOutput({
+      streams: [
+        { codec_type: 'video', codec_name: 'mjpeg', disposition: { attached_pic: 1 } },
+        { codec_type: 'video', codec_name: 'h264', disposition: { attached_pic: 0 } },
+      ],
+    });
+
+    expect(result.streams.map((stream) => stream.codec)).toEqual(['h264']);
+  });
 });

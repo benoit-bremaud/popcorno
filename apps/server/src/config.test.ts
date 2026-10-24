@@ -49,9 +49,12 @@ describe('loadConfig', () => {
     });
   });
 
-  it.each(['0', '-2', 'abc'])('falls back to one transcode at a time for %s', (value) => {
-    expect(loadConfig({ TRANSCODE_MAX_SESSIONS: value }).transcodeMaxSessions).toBe(1);
-  });
+  it.each(['0', '-2', 'abc', '1.5', 'Infinity'])(
+    'falls back to one transcode at a time for %s',
+    (value) => {
+      expect(loadConfig({ TRANSCODE_MAX_SESSIONS: value }).transcodeMaxSessions).toBe(1);
+    },
+  );
 
   it('treats an empty key or the .env.example placeholder as no key', () => {
     expect(loadConfig({ TMDB_API_KEY: '' }).tmdbApiKey).toBeNull();
