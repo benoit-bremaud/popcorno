@@ -58,6 +58,19 @@ describe('attachHls', () => {
     expect(element.hasAttribute('src')).toBe(false);
   });
 
+  it('reports a native playback error as fatal, until detached', async () => {
+    hlsState.supported = false;
+    const element = video(true);
+    const onFatal = vi.fn();
+
+    const detach = await attachHls(element, '/p.m3u8', onFatal);
+    element.dispatchEvent(new Event('error'));
+    detach();
+    element.dispatchEvent(new Event('error'));
+
+    expect(onFatal).toHaveBeenCalledOnce();
+  });
+
   it('prefers hls.js when MSE exists, even if native HLS is claimed', async () => {
     const element = video(true);
 

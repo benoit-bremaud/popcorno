@@ -23,8 +23,13 @@ export async function attachHls(
     return () => hls.destroy();
   }
   if (video.canPlayType(NATIVE_HLS) !== '') {
+    // Native playback reports failures on the element itself, not through hls.js.
+    video.addEventListener('error', onFatal);
     video.src = url;
-    return () => video.removeAttribute('src');
+    return () => {
+      video.removeEventListener('error', onFatal);
+      video.removeAttribute('src');
+    };
   }
   onFatal();
   return () => undefined;
