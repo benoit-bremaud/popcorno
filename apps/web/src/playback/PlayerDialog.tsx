@@ -248,11 +248,14 @@ export function PlayerDialog({
           onError={start.mode === 'direct' ? fail : undefined}
         />
       )}
-      {offerNext && next !== null && (
-        <button type="button" className="button player__next" onClick={() => void playNext(next)}>
-          Next episode: {next.title} ▶
-        </button>
-      )}
+      {/* Announced when it appears: focus stays on the video (spec UC7). */}
+      <div aria-live="polite" className="player__next">
+        {offerNext && next !== null && (
+          <button type="button" className="button" onClick={() => void playNext(next)}>
+            Next episode: {next.title} ▶
+          </button>
+        )}
+      </div>
     </dialog>
   );
 }

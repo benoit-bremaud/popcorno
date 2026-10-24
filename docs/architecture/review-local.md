@@ -18,9 +18,9 @@
 | 2 Coverage | server 98.1 % stmts / 95.5 % branches / 95 % funcs / 98.3 % lines · web 99.7 / 93.8 / 100 / 100 · docs ≈ 97 % (estimate, doc-auditor) |
 | 3 SonarQube | ✅ PASSED (first run FAILED: S7503 async without await in `progress/routes.ts`, then a stale web lcov; both fixed) |
 | 4 Secrets | ✅ gitleaks clean (`--all`, 27 commits) · only `.env.example` tracked · diff read: nothing sensitive |
-| 5 QA pass | ⏳ run at the pre-merge gate on the merged SHA (Chromium + Firefox, inspector pass) |
+| 5 QA pass | ✅ pass on 3a9354f (= merge result) · Chromium + Firefox, 5 scenarios · inspector clean · 3 Nice fixed (episode names, Next announced, spec 2a) · #31 headers known · report: docs/architecture/qa/2026-10-24-resume-playback.md |
 
-- Gate: **push authorised** — QA (step 5) pending for the merge.
+- Gate: **GREEN — merge authorised** once the owner approves.
 
 ## 🔴 Must Have
 

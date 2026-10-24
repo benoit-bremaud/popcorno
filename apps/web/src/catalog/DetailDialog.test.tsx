@@ -151,7 +151,7 @@ describe('DetailDialog playback', () => {
     );
 
     expect(screen.queryByRole('button', { name: '▶ Play' })).not.toBeInTheDocument();
-    await user.click(await screen.findByRole('button', { name: 'Play Secrets' }));
+    await user.click(await screen.findByRole('button', { name: 'Play Secrets, episode 1' }));
 
     expect(screen.getByRole('dialog', { name: 'Playing Secrets' })).toBeInTheDocument();
   });
@@ -224,7 +224,9 @@ describe('DetailDialog resume', () => {
       [{ season: 1, episodes: [pilot] }],
     );
 
-    await user.click(await screen.findByRole('button', { name: 'Resume Pilot from 1:05' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'Resume Pilot, episode 1 from 1:05' }),
+    );
 
     expect(api.start).toHaveBeenCalledWith({ mediaId: 'e1', directPlay: true, startSec: 65 });
   });
@@ -278,7 +280,7 @@ describe('DetailDialog progress refresh and next episode', () => {
       [saved('e2', 40)],
       [{ season: 1, episodes: [pilot, second] }],
     );
-    await user.click(await screen.findByRole('button', { name: 'Play Pilot' }));
+    await user.click(await screen.findByRole('button', { name: 'Play Pilot, episode 1' }));
     await waitFor(() => expect(document.querySelector('video')).not.toBeNull());
     const element = document.querySelector('video') as HTMLVideoElement;
     fireEvent.loadedMetadata(element);

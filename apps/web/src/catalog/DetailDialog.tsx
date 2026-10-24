@@ -34,6 +34,11 @@ function facts(item: Media): string[] {
   ].filter((fact): fact is string => fact !== null);
 }
 
+/** An episode's accessible name: untitled episodes all carry the series title. */
+function episodeName(episode: Media): string {
+  return episode.episode === null ? episode.title : `${episode.title}, episode ${episode.episode}`;
+}
+
 /** UC4: a modal `<dialog>` over the catalog; Escape or the close button close it. */
 export function DetailDialog({
   item,
@@ -177,8 +182,8 @@ export function DetailDialog({
                         className="chip chip--small detail__episode-play"
                         aria-label={
                           resume(episode) > 0
-                            ? `Resume ${episode.title} from ${formatPosition(resume(episode))}`
-                            : `Play ${episode.title}`
+                            ? `Resume ${episodeName(episode)} from ${formatPosition(resume(episode))}`
+                            : `Play ${episodeName(episode)}`
                         }
                         onClick={(event) => play(episode, resume(episode), event.currentTarget)}
                       >

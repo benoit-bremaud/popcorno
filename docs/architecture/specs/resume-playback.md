@@ -79,7 +79,8 @@ Main scenario:
 
 Extensions:
 
-- 2a. **Start over** → `startSec: 0`; the old position is overwritten by the next save.
+- 2a. **Start over** (or replaying a finished title) → `startSec: 0`; the old position,
+  `finished` included, is overwritten by the next save.
 - 4a. HLS input seeking lands on the keyframe before the offset when the video is copied:
   the picture starts up to one keyframe interval early while `offsetSec` still says
   `startSec`, so saved positions can run that much ahead. Accepted (ADR-0007 §2);
