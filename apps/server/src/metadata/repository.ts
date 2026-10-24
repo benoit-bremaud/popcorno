@@ -1,6 +1,6 @@
 import { alias } from 'drizzle-orm/sqlite-core';
 import { and, count, eq, exists, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
-import type { MediaKind, ProviderIds } from '@popcorno/shared';
+import type { MediaKind, ProviderIds } from '@popcorntv/shared';
 import type { AppDatabase } from '../db/index.js';
 import { media } from '../db/schema.js';
 import type { MetadataInput } from './matcher.js';

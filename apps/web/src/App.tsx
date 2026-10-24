@@ -5,7 +5,7 @@ export function App(): React.JSX.Element {
   return (
     <>
       <header className="header">
-        <h1 className="brand">Popcorno</h1>
+        <h1 className="brand">PopCornTV</h1>
       </header>
       <main className="shell">
         <CatalogPage />

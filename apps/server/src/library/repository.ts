@@ -10,7 +10,7 @@ import type {
   MediaMetadata,
   ProviderIds,
   StreamInfo,
-} from '@popcorno/shared';
+} from '@popcorntv/shared';
 import type { AppDatabase } from '../db/index.js';
 import { libraries, media, streams } from '../db/schema.js';
 import type { ParsedName } from './name-parser.js';

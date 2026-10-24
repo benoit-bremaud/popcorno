@@ -8,8 +8,8 @@ import {
   text,
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
-import { LIBRARY_KINDS, MEDIA_KINDS, STREAM_TYPES } from '@popcorno/shared';
-import type { CastMember, Genre, ProviderIds } from '@popcorno/shared';
+import { LIBRARY_KINDS, MEDIA_KINDS, STREAM_TYPES } from '@popcorntv/shared';
+import type { CastMember, Genre, ProviderIds } from '@popcorntv/shared';
 
 /** Persistence shape of the class diagram (04-class.md); tables derive from the entities. */
 

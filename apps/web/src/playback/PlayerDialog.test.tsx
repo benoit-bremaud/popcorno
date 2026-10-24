@@ -2,7 +2,7 @@ import { StrictMode } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { PlaybackStart } from '@popcorno/shared';
+import type { PlaybackStart } from '@popcorntv/shared';
 import { media } from '../test-fixtures.js';
 import { PlayerDialog } from './PlayerDialog.js';
 import type { PlaybackApi } from './PlayerDialog.js';

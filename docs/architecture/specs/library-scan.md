@@ -6,13 +6,13 @@
 
 ## Goal in context
 
-The owner points Popcorno at a folder of their own media files and gets a browsable
+The owner points PopCornTV at a folder of their own media files and gets a browsable
 library: every video file becomes a `Media` (film or episode) with its technical streams
 probed, ready for metadata enrichment (UC2, issue #4) and the catalog (issue #5).
 
 ## Scope and level
 
-System (Popcorno server). User-goal level.
+System (PopCornTV server). User-goal level.
 
 ## Primary actor
 

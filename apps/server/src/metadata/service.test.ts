@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Library, ProviderIds } from '@popcorno/shared';
+import type { Library, ProviderIds } from '@popcorntv/shared';
 import { openDatabase } from '../db/index.js';
 import type { AppDatabase } from '../db/index.js';
 import { LibraryRepository } from '../library/repository.js';
@@ -72,7 +72,7 @@ describe('MetadataService', () => {
     db = openDatabase(':memory:');
     libraries = new LibraryRepository(db);
     repository = new MetadataRepository(db);
-    artworkDir = await mkdtemp(join(tmpdir(), 'popcorno-meta-'));
+    artworkDir = await mkdtemp(join(tmpdir(), 'popcorntv-meta-'));
     library = libraries.createLibrary({ name: 'Films', rootPath: '/m', kind: 'films' });
   });
 

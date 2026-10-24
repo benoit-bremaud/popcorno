@@ -1,8 +1,8 @@
-# CLAUDE.md — Popcorno
+# CLAUDE.md — PopCornTV
 
 Project context for any AI agent session. Inherits the machine-global rules in
 `~/.claude/CLAUDE.md` and `~/.agent-rules/common.md`; this file only adds what is specific
-to Popcorno.
+to PopCornTV.
 
 ## What this project is
 

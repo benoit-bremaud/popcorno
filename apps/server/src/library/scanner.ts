@@ -1,7 +1,7 @@
 import type { Dirent } from 'node:fs';
 import { readdir, realpath, stat } from 'node:fs/promises';
 import { extname, join, relative, sep } from 'node:path';
-import type { Library, ScanReport, SkipReason, SkippedFile } from '@popcorno/shared';
+import type { Library, ScanReport, SkipReason, SkippedFile } from '@popcorntv/shared';
 import type { Prober } from './ffprobe.js';
 import { isExtra, parseMediaName } from './name-parser.js';
 import { isAtOrUnderRoot, resolveUnderRoot } from './path-guard.js';

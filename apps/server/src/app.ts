@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import type { FastifyError, FastifyInstance } from 'fastify';
-import type { ApiError, HealthResponse } from '@popcorno/shared';
+import type { ApiError, HealthResponse } from '@popcorntv/shared';
 import type { AppDatabase } from './db/index.js';
 import type { Prober } from './library/ffprobe.js';
 import { LibraryRepository } from './library/repository.js';

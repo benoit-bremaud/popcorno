@@ -1,6 +1,6 @@
 import { desc, eq } from 'drizzle-orm';
-import { isFinished } from '@popcorno/shared';
-import type { WatchProgress } from '@popcorno/shared';
+import { isFinished } from '@popcorntv/shared';
+import type { WatchProgress } from '@popcorntv/shared';
 import type { AppDatabase } from '../db/index.js';
 import { DEFAULT_PROFILE, media, watchProgress } from '../db/schema.js';
 

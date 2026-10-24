@@ -1,5 +1,5 @@
-import { DOCUMENTARY_GENRE_ID, isDocumentary } from '@popcorno/shared';
-import type { Genre, Media } from '@popcorno/shared';
+import { DOCUMENTARY_GENRE_ID, isDocumentary } from '@popcorntv/shared';
+import type { Genre, Media } from '@popcorntv/shared';
 
 /** The catalog's type tabs (spec §2), in display order. */
 export const CATALOG_TYPES = ['films', 'series', 'documentaries', 'others'] as const;

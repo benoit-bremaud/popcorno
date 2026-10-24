@@ -5,7 +5,7 @@ import type {
   PlaybackStart,
   ProgressBody,
   WatchProgress,
-} from '@popcorno/shared';
+} from '@popcorntv/shared';
 
 /** Prefix the dev server (and the production reverse proxy) forwards to the API. */
 const API = '/api';

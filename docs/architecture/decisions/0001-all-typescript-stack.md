@@ -6,7 +6,7 @@
 
 ## Context
 
-Popcorno needs an HTTP server (API, file serving, FFmpeg control) and a web player. The
+PopCornTV needs an HTTP server (API, file serving, FFmpeg control) and a web player. The
 heavy work — probing and transcoding video — is done by FFmpeg as an external process
 whatever the server language. The owner's other projects are all TypeScript; this is a
 solo, personal MVP.

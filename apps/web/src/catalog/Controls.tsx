@@ -1,4 +1,4 @@
-import type { Genre } from '@popcorno/shared';
+import type { Genre } from '@popcorntv/shared';
 import { TYPE_LABELS } from './catalog.js';
 import type { CatalogType } from './catalog.js';
 import type { CatalogView, ViewAction, ViewState } from './view-state.js';

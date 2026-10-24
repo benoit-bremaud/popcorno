@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { decidePlayback } from '@popcorno/shared';
-import type { CanPlay, Media, WatchProgress } from '@popcorno/shared';
+import { decidePlayback } from '@popcorntv/shared';
+import type { CanPlay, Media, WatchProgress } from '@popcorntv/shared';
 import { artworkUrl, loadProgress } from '../api.js';
 import { browserCanPlay } from '../playback/can-play.js';
 import { PlayerDialog } from '../playback/PlayerDialog.js';

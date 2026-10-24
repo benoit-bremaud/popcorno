@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import type { ApiError, Library } from '@popcorno/shared';
+import type { ApiError, Library } from '@popcorntv/shared';
 import { buildApp } from '../app.js';
 import { openDatabase } from '../db/index.js';
 import type { Prober } from './ffprobe.js';
@@ -15,7 +15,7 @@ describe('library routes', () => {
   let probe: ReturnType<typeof vi.fn<Prober>>;
 
   beforeEach(async () => {
-    mediaRoot = await mkdtemp(join(tmpdir(), 'popcorno-routes-'));
+    mediaRoot = await mkdtemp(join(tmpdir(), 'popcorntv-routes-'));
     root = join(mediaRoot, 'films');
     await mkdir(root);
     probe = vi.fn<Prober>(async () => ({ durationSec: 60, streams: [] }));

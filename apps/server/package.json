@@ -1,5 +1,5 @@
 {
-  "name": "@popcorno/server",
+  "name": "@popcorntv/server",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@fastify/static": "^10.1.6",
-    "@popcorno/shared": "workspace:*",
+    "@popcorntv/shared": "workspace:*",
     "better-sqlite3": "^13.0.3",
     "drizzle-orm": "^0.45.4",
     "fastify": "^5.12.7",

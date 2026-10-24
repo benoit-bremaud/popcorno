@@ -8,7 +8,7 @@
 ## 1. Competitor benchmark
 
 How the five references let a viewer browse a catalog (public product behaviour,
-observed on their web clients). "Keep" marks what Popcorno adopts.
+observed on their web clients). "Keep" marks what PopCornTV adopts.
 
 | Idea                                    | Plex | Jellyfin | Netflix | Disney+ | Prime | Keep | Why                                                                 |
 | --------------------------------------- | :--: | :------: | :-----: | :-----: | :---: | :--: | ------------------------------------------------------------------- |

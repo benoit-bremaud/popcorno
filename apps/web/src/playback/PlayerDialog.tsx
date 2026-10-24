@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { isFinished } from '@popcorno/shared';
-import type { Media, PlaybackStart } from '@popcorno/shared';
+import { isFinished } from '@popcorntv/shared';
+import type { Media, PlaybackStart } from '@popcorntv/shared';
 import { saveProgress, sendHeartbeat, startPlayback, stopPlayback } from '../api.js';
 import { attachHls } from './hls-source.js';
 

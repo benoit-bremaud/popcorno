@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import type { ApiError, EnrichReport, Library, Media, ScanReport } from '@popcorno/shared';
+import type { ApiError, EnrichReport, Library, Media, ScanReport } from '@popcorntv/shared';
 import { buildApp } from '../app.js';
 import { openDatabase } from '../db/index.js';
 import type { TmdbClient } from './tmdb-client.js';
@@ -50,7 +50,7 @@ describe('metadata routes', () => {
   let tmdb: TmdbClient;
 
   beforeEach(async () => {
-    mediaRoot = await mkdtemp(join(tmpdir(), 'popcorno-meta-routes-'));
+    mediaRoot = await mkdtemp(join(tmpdir(), 'popcorntv-meta-routes-'));
     artworkDir = join(mediaRoot, 'artwork');
     root = join(mediaRoot, 'films');
     await mkdir(root);
@@ -136,7 +136,7 @@ describe('metadata routes', () => {
   });
 
   it('rejects any artwork name that is not a digest, and 404s a missing one', async () => {
-    const bad = await app.inject({ method: 'GET', url: '/artwork/..%2Fpopcorno.sqlite' });
+    const bad = await app.inject({ method: 'GET', url: '/artwork/..%2Fpopcorntv.sqlite' });
     const missing = await app.inject({ method: 'GET', url: `/artwork/${DIGEST}.jpg` });
 
     expect(bad.statusCode).toBe(400);

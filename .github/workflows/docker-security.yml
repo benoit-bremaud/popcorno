@@ -61,19 +61,19 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Build
-        run: docker build --pull -t "popcorno:${{ github.sha }}" .
+        run: docker build --pull -t "popcorntv:${{ github.sha }}" .
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/trivy
           key: trivy-db-${{ github.run_id }}
           restore-keys: trivy-db-
       - name: Trivy (table, non-blocking)
-        run: make scan-docker-image IMAGE="popcorno:${{ github.sha }}" TRIVY_FORMAT=table TRIVY_EXIT=0
+        run: make scan-docker-image IMAGE="popcorntv:${{ github.sha }}" TRIVY_FORMAT=table TRIVY_EXIT=0
       - name: Trivy (SARIF, blocking)
-        run: make scan-docker-image IMAGE="popcorno:${{ github.sha }}" TRIVY_FORMAT=sarif TRIVY_OUTPUT=trivy-results.sarif TRIVY_EXIT=1
+        run: make scan-docker-image IMAGE="popcorntv:${{ github.sha }}" TRIVY_FORMAT=sarif TRIVY_OUTPUT=trivy-results.sarif TRIVY_EXIT=1
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: trivy-sarif-popcorno
+          name: trivy-sarif-popcorntv
           path: .trivy/trivy-results.sarif
           retention-days: 90

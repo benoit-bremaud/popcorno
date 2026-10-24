@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { StreamInfo } from '@popcorno/shared';
+import type { StreamInfo } from '@popcorntv/shared';
 
 const execFileAsync = promisify(execFile);
 

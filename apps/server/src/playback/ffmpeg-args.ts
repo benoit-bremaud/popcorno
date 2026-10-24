@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import type { StreamInfo } from '@popcorno/shared';
+import type { StreamInfo } from '@popcorntv/shared';
 
 /** Playlist and segment names FFmpeg writes in a session directory (spec hls-transcode §2.3). */
 export const PLAYLIST_NAME = 'index.m3u8';

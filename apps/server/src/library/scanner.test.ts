@@ -2,7 +2,7 @@ import { chmod, mkdir, mkdtemp, rename, rm, symlink, utimes, writeFile } from 'n
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Library } from '@popcorno/shared';
+import type { Library } from '@popcorntv/shared';
 import { openDatabase } from '../db/index.js';
 import type { AppDatabase } from '../db/index.js';
 import type { MetadataInput } from '../metadata/matcher.js';
@@ -59,7 +59,7 @@ describe('LibraryScanner', () => {
   let library: Library;
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'popcorno-scan-'));
+    root = await mkdtemp(join(tmpdir(), 'popcorntv-scan-'));
     db = openDatabase(':memory:');
     repository = new LibraryRepository(db);
     probe = makeProbe();
@@ -222,7 +222,7 @@ describe('LibraryScanner', () => {
   it('skips extras and a symlink escaping the root', async () => {
     await touch(root, 'Matrix (1999)/Matrix (1999).mkv');
     await touch(root, 'Matrix (1999)/extras/Making of.mkv');
-    const outside = await mkdtemp(join(tmpdir(), 'popcorno-outside-'));
+    const outside = await mkdtemp(join(tmpdir(), 'popcorntv-outside-'));
     try {
       await symlink(await touch(outside, 'Secret (2020).mkv'), join(root, 'Secret (2020).mkv'));
 
@@ -296,7 +296,7 @@ describe('LibraryScanner', () => {
   });
 
   it('rejects a root that is a link to a folder outside MEDIA_ROOT (spec 2b)', async () => {
-    const outside = await mkdtemp(join(tmpdir(), 'popcorno-outside-'));
+    const outside = await mkdtemp(join(tmpdir(), 'popcorntv-outside-'));
     try {
       await touch(outside, 'Secret (2000).mkv');
       await symlink(outside, join(root, 'escape'));

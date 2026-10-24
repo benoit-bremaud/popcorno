@@ -7,7 +7,7 @@ import type {
   PlaybackSessionBody,
   StreamInfo,
   WatchProgress,
-} from '@popcorno/shared';
+} from '@popcorntv/shared';
 import type { PlaybackApi } from '../playback/PlayerDialog.js';
 import { media } from '../test-fixtures.js';
 import { DetailDialog } from './DetailDialog.js';

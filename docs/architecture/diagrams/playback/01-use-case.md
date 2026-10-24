@@ -5,7 +5,7 @@
 
 ## Context
 
-Who wants what from Popcorno in the MVP. Grouped by domain (Library, Browse, Watch,
+Who wants what from PopCornTV in the MVP. Grouped by domain (Library, Browse, Watch,
 Profiles), never by the package that implements them. Does not show how the system is
 structured — see `03-component.md`.
 
@@ -16,7 +16,7 @@ flowchart LR
   Viewer((Viewer))
   Owner((Owner))
   TMDB(("TMDB (external)"))
-  subgraph SYSTEM ["Popcorno"]
+  subgraph SYSTEM ["PopCornTV"]
     subgraph Library ["Library domain"]
       UC1(("Scan a media folder"))
       UC2(("Refresh metadata"))

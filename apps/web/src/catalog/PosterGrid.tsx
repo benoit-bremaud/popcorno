@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import type { Media } from '@popcorno/shared';
+import type { Media } from '@popcorntv/shared';
 import { PosterCard } from './PosterCard.js';
 
 type Props = {

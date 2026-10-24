@@ -1,4 +1,4 @@
-import type { Media } from '@popcorno/shared';
+import type { Media } from '@popcorntv/shared';
 import type { Row } from './catalog.js';
 import { PosterCard } from './PosterCard.js';
 

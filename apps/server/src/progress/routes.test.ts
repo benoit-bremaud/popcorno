@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import Fastify from 'fastify';
-import type { MediaKind, WatchProgress } from '@popcorno/shared';
+import type { MediaKind, WatchProgress } from '@popcorntv/shared';
 import { openDatabase } from '../db/index.js';
 import type { AppDatabase } from '../db/index.js';
 import { libraries, media } from '../db/schema.js';
